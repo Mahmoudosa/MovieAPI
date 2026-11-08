@@ -12,3 +12,4 @@ namespace MyMovieApp.Data
         public DbSet<Movie> Movies { get; set; }   
     }
 }
+    
