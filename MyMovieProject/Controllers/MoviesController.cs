@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using MyMovieApp.Data;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
@@ -17,23 +18,23 @@ public class MoviesController: ControllerBase
     }
 
     [HttpGet]
-    public ActionResult GetMovies()
+    public async Task<ActionResult> GetMovies()
     {
-        var movies = _context.Movies
+        var movies = await _context.Movies
             .Select(m => new MovieListDto
             {
                 Title = m.Title,
                 Director = m.Director
             })
-            .ToList();
-
+            .ToListAsync();
+    
         return Ok(movies);
     }
     
     [HttpGet("{id}")]
-    public ActionResult GetMovieById(int id)
+    public async Task<ActionResult> GetMovieById(int id)
     {
-        var movie = _context.Movies
+        var movie = await _context.Movies
             .Where(m => m.Id == id)
             .Select(m => new MovieDetailsDto
             {
@@ -42,7 +43,7 @@ public class MoviesController: ControllerBase
                 ReleaseYear = m.ReleaseYear,
                 Genre = m.Genre
             })
-            .FirstOrDefault();
+            .FirstOrDefaultAsync();
 
         if (movie == null)
         {
@@ -53,17 +54,17 @@ public class MoviesController: ControllerBase
     }
 
     [HttpPost]
-    public ActionResult AddMovie(Movie movie)
+    public async Task<ActionResult> AddMovie(Movie movie)
     {
-        _context.Movies.Add(movie);
-        _context.SaveChanges();
+        await _context.Movies.AddAsync(movie);
+        await _context.SaveChangesAsync();
         return Ok(movie);
     }
 
     [HttpPut("{id}")]
-    public ActionResult UpdateMovie(int id, Movie updatedMovie)
+    public async Task<ActionResult> UpdateMovie(int id, Movie updatedMovie)
     {
-        Movie movie = _context.Movies.FirstOrDefault(m => m.Id == id);
+        Movie movie = await _context.Movies.FirstOrDefaultAsync(m => m.Id == id);
 
         if (movie == null)
         {
@@ -75,21 +76,21 @@ public class MoviesController: ControllerBase
         movie.ReleaseYear = updatedMovie.ReleaseYear;
         movie.Genre = updatedMovie.Genre;
 
-        _context.SaveChanges();
+        await _context.SaveChangesAsync();
 
         return Ok(movie);
     }
 
     [HttpDelete("{id}")]
-    public ActionResult DeleteMovie(int id)
+    public async Task<ActionResult> DeleteMovie(int id)
     {
-        Movie movie = _context.Movies.FirstOrDefault(m => m.Id == id);
+        Movie movie = await _context.Movies.FirstOrDefaultAsync(m => m.Id == id);
         if (movie == null)
         {
             return NotFound();
         }
         _context.Movies.Remove(movie);
-        _context.SaveChanges();
+        await _context.SaveChangesAsync();
         return Ok();
     }
 

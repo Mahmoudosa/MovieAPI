@@ -10,6 +10,7 @@ namespace MyMovieApp.Data
             
         }
         public DbSet<Movie> Movies { get; set; }   
+        public DbSet<Review> Reviews { get; set; }
+        public DbSet<Watchlist> Watchlists { get; set; }
     }
 }
-    
