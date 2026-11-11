@@ -55,5 +55,16 @@ namespace MyMovieApp.Repositories
             return await _context.Watchlists
                 .AnyAsync(w => w.UserId == userId);
         }
+
+        public async Task<User?> GetByUserNameAndEmailAsync(
+            string userName,
+        string email)
+        {
+        return await _context.Users
+            .FirstOrDefaultAsync(u =>
+                u.UserName == userName &&
+                u.Email == email);
+        }
+
     }
 }

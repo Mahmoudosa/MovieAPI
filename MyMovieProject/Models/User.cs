@@ -8,6 +8,7 @@ namespace MyMovieApp.Models
         public string UserName { get; set; } = string.Empty;
 
         public string Email { get; set; } = string.Empty;
+    
 
         // Navigation Properties
         public ICollection<Review> Reviews { get; set; }

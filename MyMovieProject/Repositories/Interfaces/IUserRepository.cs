@@ -16,7 +16,9 @@ namespace MyMovieApp.Repositories.Interfaces
         Task DeleteAsync(User user);
 
         Task<bool> HasReviewsAsync(int userId);
-
+        Task<User?> GetByUserNameAndEmailAsync(
+        string userName,
+        string email);
         Task<bool> HasWatchlistsAsync(int userId);
     }
 }

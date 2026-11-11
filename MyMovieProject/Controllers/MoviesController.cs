@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
 using MyMovieApp.Repositories.Interfaces;
-
+using Microsoft.AspNetCore.Authorization;
 namespace MyMovieApp.Controllers;
 
 [ApiController]
@@ -18,6 +18,7 @@ public class MoviesController : ControllerBase
     }
 
     // GET: api/movies
+    [Authorize]
     [HttpGet]
     public async Task<ActionResult> GetMovies()
     {
