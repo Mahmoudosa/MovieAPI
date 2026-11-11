@@ -1,9 +1,8 @@
 
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyMovieApp.Data;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
+using MyMovieApp.Repositories.Interfaces;
 
 namespace MyMovieApp.Controllers;
 
@@ -11,47 +10,48 @@ namespace MyMovieApp.Controllers;
 [Route("api/[controller]")]
 public class CategoriesController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly ICategoryRepository _categoryRepository;
 
-    public CategoriesController(AppDbContext context)
+    public CategoriesController(
+        ICategoryRepository categoryRepository)
     {
-        _context = context;
+        _categoryRepository = categoryRepository;
     }
 
+    // GET: api/categories
     [HttpGet]
     public async Task<ActionResult> GetCategories()
     {
-        var categories = await _context.Categories
-            .Select(c => new
-            {
-                c.Id,
-                c.Name,
-                c.Description
-            })
-            .ToListAsync();
+        var categories = await _categoryRepository.GetAllAsync();
 
-        return Ok(categories);
+        var result = categories.Select(c => new
+        {
+            c.Id,
+            c.Name,
+            c.Description
+        });
+
+        return Ok(result);
     }
 
+    // GET: api/categories/1
     [HttpGet("{id}")]
     public async Task<ActionResult> GetCategoryById(int id)
     {
-        var category = await _context.Categories
-            .Where(c => c.Id == id)
-            .Select(c => new
-            {
-                c.Id,
-                c.Name,
-                c.Description
-            })
-            .FirstOrDefaultAsync();
+        var category = await _categoryRepository.GetByIdAsync(id);
 
         if (category == null)
             return NotFound();
 
-        return Ok(category);
+        return Ok(new
+        {
+            category.Id,
+            category.Name,
+            category.Description
+        });
     }
 
+    // POST: api/categories
     [HttpPost]
     public async Task<ActionResult> AddCategory(CategoryDto dto)
     {
@@ -61,8 +61,7 @@ public class CategoriesController : ControllerBase
             Description = dto.Description
         };
 
-        _context.Categories.Add(category);
-        await _context.SaveChangesAsync();
+        await _categoryRepository.AddAsync(category);
 
         return CreatedAtAction(
             nameof(GetCategoryById),
@@ -75,11 +74,12 @@ public class CategoriesController : ControllerBase
             });
     }
 
+    // PUT: api/categories/1
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateCategory(
         int id, CategoryDto dto)
     {
-        var category = await _context.Categories.FindAsync(id);
+        var category = await _categoryRepository.GetByIdAsync(id);
 
         if (category == null)
             return NotFound();
@@ -87,7 +87,7 @@ public class CategoriesController : ControllerBase
         category.Name = dto.Name;
         category.Description = dto.Description;
 
-        await _context.SaveChangesAsync();
+        await _categoryRepository.SaveChangesAsync();
 
         return Ok(new
         {
@@ -97,23 +97,22 @@ public class CategoriesController : ControllerBase
         });
     }
 
+    // DELETE: api/categories/1
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteCategory(int id)
     {
-        var category = await _context.Categories.FindAsync(id);
+        var category = await _categoryRepository.GetByIdAsync(id);
 
         if (category == null)
             return NotFound();
 
-        bool hasMovies = await _context.Movies
-            .AnyAsync(m => m.CategoryId == id);
+        bool hasMovies = await _categoryRepository.HasMoviesAsync(id);
 
         if (hasMovies)
             return Conflict(
-                "Cannot delete a category that contains movies.");
+                "Cannot delete category because it has movies.");
 
-        _context.Categories.Remove(category);
-        await _context.SaveChangesAsync();
+        await _categoryRepository.DeleteAsync(category);
 
         return NoContent();
     }

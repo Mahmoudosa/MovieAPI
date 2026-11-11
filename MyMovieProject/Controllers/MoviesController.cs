@@ -1,9 +1,8 @@
 
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyMovieApp.Data;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
+using MyMovieApp.Repositories.Interfaces;
 
 namespace MyMovieApp.Controllers;
 
@@ -11,58 +10,58 @@ namespace MyMovieApp.Controllers;
 [Route("api/[controller]")]
 public class MoviesController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly IMovieRepository _movieRepository;
 
-    public MoviesController(AppDbContext context)
+    public MoviesController(IMovieRepository movieRepository)
     {
-        _context = context;
+        _movieRepository = movieRepository;
     }
 
+    // GET: api/movies
     [HttpGet]
     public async Task<ActionResult> GetMovies()
     {
-        var movies = await _context.Movies
-            .Select(m => new
-            {
-                m.Id,
-                m.Title,
-                m.Director,
-                m.ReleaseYear,
-                m.CategoryId,
-                CategoryName = m.Category.Name
-            })
-            .ToListAsync();
+        var movies = await _movieRepository.GetAllAsync();
 
-        return Ok(movies);
+        var result = movies.Select(m => new
+        {
+            m.Id,
+            m.Title,
+            m.Director,
+            m.ReleaseYear,
+            m.CategoryId,
+            CategoryName = m.Category.Name
+        });
+
+        return Ok(result);
     }
 
+    // GET: api/movies/1
     [HttpGet("{id}")]
     public async Task<ActionResult> GetMovieById(int id)
     {
-        var movie = await _context.Movies
-            .Where(m => m.Id == id)
-            .Select(m => new
-            {
-                m.Id,
-                m.Title,
-                m.Director,
-                m.ReleaseYear,
-                m.CategoryId,
-                CategoryName = m.Category.Name
-            })
-            .FirstOrDefaultAsync();
+        var movie = await _movieRepository.GetByIdAsync(id);
 
         if (movie == null)
             return NotFound();
 
-        return Ok(movie);
+        return Ok(new
+        {
+            movie.Id,
+            movie.Title,
+            movie.Director,
+            movie.ReleaseYear,
+            movie.CategoryId,
+            CategoryName = movie.Category.Name
+        });
     }
 
+    // POST: api/movies
     [HttpPost]
     public async Task<ActionResult> AddMovie(MovieDto dto)
     {
-        bool categoryExists = await _context.Categories
-            .AnyAsync(c => c.Id == dto.CategoryId);
+        bool categoryExists =
+            await _movieRepository.CategoryExistsAsync(dto.CategoryId);
 
         if (!categoryExists)
             return BadRequest("Category does not exist.");
@@ -75,27 +74,32 @@ public class MoviesController : ControllerBase
             CategoryId = dto.CategoryId
         };
 
-        _context.Movies.Add(movie);
-        await _context.SaveChangesAsync();
+        await _movieRepository.AddAsync(movie);
 
         return CreatedAtAction(
             nameof(GetMovieById),
             new { id = movie.Id },
-            new { movie.Id, movie.Title, movie.Director,
-                  movie.ReleaseYear, movie.CategoryId });
+            new
+            {
+                movie.Id,
+                movie.Title,
+                movie.Director,
+                movie.ReleaseYear,
+                movie.CategoryId
+            });
     }
 
+    // PUT: api/movies/1
     [HttpPut("{id}")]
-    public async Task<ActionResult> UpdateMovie(
-        int id, MovieDto dto)
+    public async Task<ActionResult> UpdateMovie(int id, MovieDto dto)
     {
-        var movie = await _context.Movies.FindAsync(id);
+        var movie = await _movieRepository.GetByIdAsync(id);
 
         if (movie == null)
             return NotFound();
 
-        bool categoryExists = await _context.Categories
-            .AnyAsync(c => c.Id == dto.CategoryId);
+        bool categoryExists =
+            await _movieRepository.CategoryExistsAsync(dto.CategoryId);
 
         if (!categoryExists)
             return BadRequest("Category does not exist.");
@@ -105,7 +109,7 @@ public class MoviesController : ControllerBase
         movie.ReleaseYear = dto.ReleaseYear;
         movie.CategoryId = dto.CategoryId;
 
-        await _context.SaveChangesAsync();
+        await _movieRepository.UpdateAsync(movie);
 
         return Ok(new
         {
@@ -117,16 +121,16 @@ public class MoviesController : ControllerBase
         });
     }
 
+    // DELETE: api/movies/1
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteMovie(int id)
     {
-        var movie = await _context.Movies.FindAsync(id);
+        var movie = await _movieRepository.GetByIdAsync(id);
 
         if (movie == null)
             return NotFound();
 
-        _context.Movies.Remove(movie);
-        await _context.SaveChangesAsync();
+        await _movieRepository.DeleteAsync(movie);
 
         return NoContent();
     }

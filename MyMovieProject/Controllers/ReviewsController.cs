@@ -1,9 +1,8 @@
 
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using MyMovieApp.Data;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
+using MyMovieApp.Repositories.Interfaces;
 
 namespace MyMovieApp.Controllers;
 
@@ -11,66 +10,66 @@ namespace MyMovieApp.Controllers;
 [Route("api/[controller]")]
 public class ReviewsController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly IReviewRepository _reviewRepository;
 
-    public ReviewsController(AppDbContext context)
+    public ReviewsController(IReviewRepository reviewRepository)
     {
-        _context = context;
+        _reviewRepository = reviewRepository;
     }
 
+    // GET: api/reviews
     [HttpGet]
     public async Task<ActionResult> GetReviews()
     {
-        var reviews = await _context.Reviews
-            .Select(r => new
-            {
-                r.Id,
-                r.Rating,
-                r.Comment,
-                r.MovieId,
-                MovieTitle = r.Movie.Title,
-                r.UserId,
-                UserName = r.User.UserName
-            })
-            .ToListAsync();
+        var reviews = await _reviewRepository.GetAllAsync();
 
-        return Ok(reviews);
+        var result = reviews.Select(r => new
+        {
+            r.Id,
+            r.Rating,
+            r.Comment,
+            r.MovieId,
+            MovieTitle = r.Movie.Title,
+            r.UserId,
+            UserName = r.User.UserName
+        });
+
+        return Ok(result);
     }
 
+    // GET: api/reviews/1
     [HttpGet("{id}")]
     public async Task<ActionResult> GetReviewById(int id)
     {
-        var review = await _context.Reviews
-            .Where(r => r.Id == id)
-            .Select(r => new
-            {
-                r.Id,
-                r.Rating,
-                r.Comment,
-                r.MovieId,
-                MovieTitle = r.Movie.Title,
-                r.UserId,
-                UserName = r.User.UserName
-            })
-            .FirstOrDefaultAsync();
+        var review = await _reviewRepository.GetByIdAsync(id);
 
         if (review == null)
             return NotFound();
 
-        return Ok(review);
+        return Ok(new
+        {
+            review.Id,
+            review.Rating,
+            review.Comment,
+            review.MovieId,
+            MovieTitle = review.Movie.Title,
+            review.UserId,
+            UserName = review.User.UserName
+        });
     }
 
+    // POST: api/reviews
     [HttpPost]
     public async Task<ActionResult> AddReview(ReviewDto dto)
     {
         if (dto.Rating < 1 || dto.Rating > 5)
             return BadRequest("Rating must be between 1 and 5.");
 
-        bool movieExists = await _context.Movies
-            .AnyAsync(m => m.Id == dto.MovieId);
+        bool movieExists =
+            await _reviewRepository.MovieExistsAsync(dto.MovieId);
 
-        bool userExists = await _context.Users
-            .AnyAsync(u => u.Id == dto.UserId);
+        bool userExists =
+            await _reviewRepository.UserExistsAsync(dto.UserId);
 
         if (!movieExists || !userExists)
             return BadRequest("Invalid MovieId or UserId.");
@@ -83,8 +82,7 @@ public class ReviewsController : ControllerBase
             UserId = dto.UserId
         };
 
-        _context.Reviews.Add(review);
-        await _context.SaveChangesAsync();
+        await _reviewRepository.AddAsync(review);
 
         return CreatedAtAction(
             nameof(GetReviewById),
@@ -99,11 +97,12 @@ public class ReviewsController : ControllerBase
             });
     }
 
+    // PUT: api/reviews/1
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateReview(
         int id, ReviewDto dto)
     {
-        var review = await _context.Reviews.FindAsync(id);
+        var review = await _reviewRepository.GetByIdAsync(id);
 
         if (review == null)
             return NotFound();
@@ -111,11 +110,11 @@ public class ReviewsController : ControllerBase
         if (dto.Rating < 1 || dto.Rating > 5)
             return BadRequest("Rating must be between 1 and 5.");
 
-        bool movieExists = await _context.Movies
-            .AnyAsync(m => m.Id == dto.MovieId);
+        bool movieExists =
+            await _reviewRepository.MovieExistsAsync(dto.MovieId);
 
-        bool userExists = await _context.Users
-            .AnyAsync(u => u.Id == dto.UserId);
+        bool userExists =
+            await _reviewRepository.UserExistsAsync(dto.UserId);
 
         if (!movieExists || !userExists)
             return BadRequest("Invalid MovieId or UserId.");
@@ -125,7 +124,7 @@ public class ReviewsController : ControllerBase
         review.MovieId = dto.MovieId;
         review.UserId = dto.UserId;
 
-        await _context.SaveChangesAsync();
+        await _reviewRepository.SaveChangesAsync();
 
         return Ok(new
         {
@@ -137,16 +136,16 @@ public class ReviewsController : ControllerBase
         });
     }
 
+    // DELETE: api/reviews/1
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteReview(int id)
     {
-        var review = await _context.Reviews.FindAsync(id);
+        var review = await _reviewRepository.GetByIdAsync(id);
 
         if (review == null)
             return NotFound();
 
-        _context.Reviews.Remove(review);
-        await _context.SaveChangesAsync();
+        await _reviewRepository.DeleteAsync(review);
 
         return NoContent();
     }
