@@ -9,7 +9,7 @@ namespace MyMovieApp.Models
 
         public string Email { get; set; } = string.Empty;
     
-
+        public string? PasswordHash { get; set; }
         // Navigation Properties
         public ICollection<Review> Reviews { get; set; }
             = new List<Review>();

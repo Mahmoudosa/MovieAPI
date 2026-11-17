@@ -20,5 +20,10 @@ namespace MyMovieApp.Repositories.Interfaces
         string userName,
         string email);
         Task<bool> HasWatchlistsAsync(int userId);
+        Task<User?> GetByEmailAsync(string email);
+
+        
+
+        
     }
 }
