@@ -1,17 +1,40 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import DevelopmentRoleSwitcher from './DevelopmentRoleSwitcher';
 
 function Navbar() {
+  const [query, setQuery] = useState('');
+  const navigate = useNavigate();
+
+  const submitSearch = (event) => {
+    event.preventDefault();
+    navigate(`/movies${query.trim() ? `?search=${encodeURIComponent(query.trim())}` : ''}`);
+  };
+
   return (
     <header className="navbar">
-      <Link to="/">
-        <h1>MyMovieApp</h1>
+      <Link className="brand" to="/" aria-label="MyMovieApp home">
+        <span className="brand-mark" aria-hidden="true">M</span>
+        <span>MyMovie<span>App</span></span>
       </Link>
 
       <div className="nav-actions">
-        <input type="text" placeholder="Search movies..." />
-        <Link to="/login">
-          <button>Login</button>
+        <form className="navbar-search" onSubmit={submitSearch} role="search">
+          <label className="visually-hidden" htmlFor="navbar-search">Search movies</label>
+          <input
+            id="navbar-search"
+            type="search"
+            placeholder="Search movies..."
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <button type="submit" aria-label="Search">⌕</button>
+        </form>
+        <Link className="button button-primary nav-login" to="/login">
+          Login
         </Link>
+        <DevelopmentRoleSwitcher />
+        <Link className="avatar-link" to="/profile" aria-label="View demo profile">MF</Link>
       </div>
     </header>
   );
