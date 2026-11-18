@@ -1,7 +1,8 @@
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Distributed;
+using System.Text.Json;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
 using MyMovieApp.Repositories.Interfaces;
@@ -13,16 +14,16 @@ namespace MyMovieApp.Controllers;
 public class MoviesController : ControllerBase
 {
     private readonly IMovieRepository _movieRepository;
-    private readonly IMemoryCache _memoryCache;
+    private readonly IDistributedCache _cache;
 
     private const string MoviesCacheKey = "movies_all";
 
     public MoviesController(
         IMovieRepository movieRepository,
-        IMemoryCache memoryCache)
+        IDistributedCache cache)
     {
         _movieRepository = movieRepository;
-        _memoryCache = memoryCache;
+        _cache = cache;
     }
 
     // GET: api/movies
@@ -30,41 +31,46 @@ public class MoviesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult> GetMovies()
     {
-        // 1. Check cache
-        if (_memoryCache.TryGetValue(
-            MoviesCacheKey,
-            out object? cachedMovies)
-            && cachedMovies != null)
-        {
-            Console.WriteLine("CACHE HIT - All Movies");
+        // 1. Check Redis
+        var cachedMovies = await _cache.GetStringAsync(
+            MoviesCacheKey);
 
-            return Ok(cachedMovies);
+        if (cachedMovies != null)
+        {
+            Console.WriteLine("REDIS CACHE HIT - All Movies");
+
+            var result = JsonSerializer.Deserialize<
+                List<MovieResponseDto>>(cachedMovies);
+
+            return Ok(result);
         }
 
-        Console.WriteLine("CACHE MISS - All Movies");
+        Console.WriteLine("REDIS CACHE MISS - All Movies");
 
-        // 2. Get movies from database
+        // 2. Query SQL Server
         var movies = await _movieRepository.GetAllAsync();
 
-        // 3. Convert movies to response objects
-        var result = movies.Select(m => new
+        var resultFromDb = movies.Select(m => new MovieResponseDto
         {
-            m.Id,
-            m.Title,
-            m.Director,
-            m.ReleaseYear,
-            m.CategoryId,
+            Id = m.Id,
+            Title = m.Title,
+            Director = m.Director,
+            ReleaseYear = m.ReleaseYear,
+            CategoryId = m.CategoryId,
             CategoryName = m.Category.Name
         }).ToList();
 
-        // 4. Store result in cache for 5 minutes
-        _memoryCache.Set(
+        // 3. Save JSON to Redis
+        await _cache.SetStringAsync(
             MoviesCacheKey,
-            result,
-            TimeSpan.FromMinutes(5)
-        );
+            JsonSerializer.Serialize(resultFromDb),
+            new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow =
+                    TimeSpan.FromMinutes(5)
+            });
 
-        return Ok(result);
+        return Ok(resultFromDb);
     }
 
     // GET: api/movies/1
@@ -73,44 +79,48 @@ public class MoviesController : ControllerBase
     {
         string cacheKey = $"movie_{id}";
 
-        // 1. Check cache
-        if (_memoryCache.TryGetValue(
-            cacheKey,
-            out object? cachedMovie)
-            && cachedMovie != null)
-        {
-            Console.WriteLine($"CACHE HIT - Movie {id}");
+        // 1. Check Redis
+        var cachedMovie = await _cache.GetStringAsync(cacheKey);
 
-            return Ok(cachedMovie);
+        if (cachedMovie != null)
+        {
+            Console.WriteLine($"REDIS CACHE HIT - Movie {id}");
+
+            var result = JsonSerializer.Deserialize<
+                MovieResponseDto>(cachedMovie);
+
+            return Ok(result);
         }
 
-        Console.WriteLine($"CACHE MISS - Movie {id}");
+        Console.WriteLine($"REDIS CACHE MISS - Movie {id}");
 
-        // 2. Get movie from database
+        // 2. Query SQL Server
         var movie = await _movieRepository.GetByIdAsync(id);
 
         if (movie == null)
             return NotFound();
 
-        // 3. Create response object
-        var result = new
+        var resultFromDb = new MovieResponseDto
         {
-            movie.Id,
-            movie.Title,
-            movie.Director,
-            movie.ReleaseYear,
-            movie.CategoryId,
+            Id = movie.Id,
+            Title = movie.Title,
+            Director = movie.Director,
+            ReleaseYear = movie.ReleaseYear,
+            CategoryId = movie.CategoryId,
             CategoryName = movie.Category.Name
         };
 
-        // 4. Store movie in cache
-        _memoryCache.Set(
+        // 3. Save to Redis
+        await _cache.SetStringAsync(
             cacheKey,
-            result,
-            TimeSpan.FromMinutes(5)
-        );
+            JsonSerializer.Serialize(resultFromDb),
+            new DistributedCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow =
+                    TimeSpan.FromMinutes(5)
+            });
 
-        return Ok(result);
+        return Ok(resultFromDb);
     }
 
     // POST: api/movies
@@ -132,11 +142,10 @@ public class MoviesController : ControllerBase
             CategoryId = dto.CategoryId
         };
 
-        // Save new movie
         await _movieRepository.AddAsync(movie);
 
-        // Remove old movies list from cache
-        _memoryCache.Remove(MoviesCacheKey);
+        // Invalidate Redis list cache
+        await _cache.RemoveAsync(MoviesCacheKey);
 
         return CreatedAtAction(
             nameof(GetMovieById),
@@ -169,18 +178,16 @@ public class MoviesController : ControllerBase
         if (!categoryExists)
             return BadRequest("Category does not exist.");
 
-        // Update movie properties
         movie.Title = dto.Title;
         movie.Director = dto.Director;
         movie.ReleaseYear = dto.ReleaseYear;
         movie.CategoryId = dto.CategoryId;
 
-        // Save changes
         await _movieRepository.UpdateAsync(movie);
 
-        // Invalidate affected cache entries
-        _memoryCache.Remove(MoviesCacheKey);
-        _memoryCache.Remove($"movie_{id}");
+        // Invalidate Redis cache
+        await _cache.RemoveAsync(MoviesCacheKey);
+        await _cache.RemoveAsync($"movie_{id}");
 
         return Ok(new
         {
@@ -201,12 +208,11 @@ public class MoviesController : ControllerBase
         if (movie == null)
             return NotFound();
 
-        // Delete movie from database
         await _movieRepository.DeleteAsync(movie);
 
-        // Invalidate affected cache entries
-        _memoryCache.Remove(MoviesCacheKey);
-        _memoryCache.Remove($"movie_{id}");
+        // Invalidate Redis cache
+        await _cache.RemoveAsync(MoviesCacheKey);
+        await _cache.RemoveAsync($"movie_{id}");
 
         return NoContent();
     }
