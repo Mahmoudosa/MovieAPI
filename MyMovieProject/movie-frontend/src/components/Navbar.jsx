@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import DevelopmentRoleSwitcher from './DevelopmentRoleSwitcher';
+import { useAuth } from '../hooks/useAuth';
 
 function Navbar() {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
+  const { isAuthenticated, user, signOut } = useAuth();
 
   const submitSearch = (event) => {
     event.preventDefault();
@@ -30,11 +32,28 @@ function Navbar() {
           />
           <button type="submit" aria-label="Search">⌕</button>
         </form>
-        <Link className="button button-primary nav-login" to="/login">
-          Login
-        </Link>
+        {isAuthenticated ? (
+          <button
+            className="button button-primary nav-login"
+            type="button"
+            onClick={() => {
+              signOut();
+              navigate('/', { replace: true });
+            }}
+          >
+            Log out
+          </button>
+        ) : (
+          <Link className="button button-primary nav-login" to="/login">
+            Login
+          </Link>
+        )}
         <DevelopmentRoleSwitcher />
-        <Link className="avatar-link" to="/profile" aria-label="View demo profile">MF</Link>
+        <Link className="avatar-link" to="/profile" aria-label="View profile">
+          {isAuthenticated && user?.userName
+            ? user.userName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()
+            : 'MF'}
+        </Link>
       </div>
     </header>
   );

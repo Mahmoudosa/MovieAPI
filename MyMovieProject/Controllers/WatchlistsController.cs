@@ -1,5 +1,7 @@
 
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
 using MyMovieApp.Repositories.Interfaces;
@@ -19,10 +21,16 @@ public class WatchlistsController : ControllerBase
     }
 
     // GET: api/watchlists
+    [Authorize]
     [HttpGet]
     public async Task<ActionResult> GetWatchlists()
     {
-        var watchlists = await _watchlistRepository.GetAllAsync();
+        int? currentUserId = GetCurrentUserId();
+        if (currentUserId is null)
+            return Forbid();
+
+        var watchlists = (await _watchlistRepository.GetAllAsync())
+            .Where(w => w.UserId == currentUserId.Value);
 
         var result = watchlists.Select(w => new
         {
@@ -39,6 +47,7 @@ public class WatchlistsController : ControllerBase
     }
 
     // GET: api/watchlists/1
+    [Authorize]
     [HttpGet("{id}")]
     public async Task<ActionResult> GetWatchlistById(int id)
     {
@@ -46,6 +55,9 @@ public class WatchlistsController : ControllerBase
 
         if (watchlist == null)
             return NotFound();
+
+        if (watchlist.UserId != GetCurrentUserId())
+            return Forbid();
 
         return Ok(new
         {
@@ -60,9 +72,14 @@ public class WatchlistsController : ControllerBase
     }
 
     // POST: api/watchlists
+    [Authorize]
     [HttpPost]
     public async Task<ActionResult> AddWatchlist(WatchlistDto dto)
     {
+        int? currentUserId = GetCurrentUserId();
+        if (currentUserId is null || dto.UserId != currentUserId.Value)
+            return Forbid();
+
         bool movieExists =
             await _watchlistRepository.MovieExistsAsync(dto.MovieId);
 
@@ -103,6 +120,7 @@ public class WatchlistsController : ControllerBase
     }
 
     // PUT: api/watchlists/1
+    [Authorize]
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateWatchlist(
         int id, WatchlistDto dto)
@@ -112,6 +130,12 @@ public class WatchlistsController : ControllerBase
 
         if (watchlist == null)
             return NotFound();
+
+        int? currentUserId = GetCurrentUserId();
+        if (currentUserId is null ||
+            watchlist.UserId != currentUserId.Value ||
+            dto.UserId != currentUserId.Value)
+            return Forbid();
 
         bool movieExists =
             await _watchlistRepository.MovieExistsAsync(dto.MovieId);
@@ -147,6 +171,7 @@ public class WatchlistsController : ControllerBase
     }
 
     // DELETE: api/watchlists/1
+    [Authorize]
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteWatchlist(int id)
     {
@@ -156,8 +181,17 @@ public class WatchlistsController : ControllerBase
         if (watchlist == null)
             return NotFound();
 
+        if (watchlist.UserId != GetCurrentUserId())
+            return Forbid();
+
         await _watchlistRepository.DeleteAsync(watchlist);
 
         return NoContent();
+    }
+
+    private int? GetCurrentUserId()
+    {
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(claim, out var userId) ? userId : null;
     }
 }

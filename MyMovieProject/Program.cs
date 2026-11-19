@@ -50,10 +50,20 @@ builder.Services
             };
     });
 
-
-
 builder.Services.AddAuthorization();
 builder.Services.AddMemoryCache();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ReactFrontend", policy =>
+    {
+        policy.WithOrigins(
+                "http://localhost:5173",
+                "http://127.0.0.1:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 builder.Services.AddStackExchangeRedisCache(options =>
 {
     options.Configuration = builder.Configuration
@@ -68,19 +78,11 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
-app.UseAuthentication();
-app.UseAuthorization();
-
 app.UseHttpsRedirection();
-app.MapControllers();
+app.UseCors("ReactFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseCors(policy =>
-{   
-    policy.AllowAnyOrigin();
-    policy.AllowAnyHeader();
-    policy.AllowAnyMethod();
-});
+app.MapControllers();
 
 var summaries = new[]
 {

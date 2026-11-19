@@ -12,7 +12,7 @@ function AuthorLayout() {
           <span className="portal-badge author-badge">AUTHOR DEMO</span>
         </Link>
         <div className="portal-header-actions">
-          <span className="demo-warning">Editorial preview · Mock content only</span>
+          <span className="demo-warning">Articles are demo content · Movies use the API</span>
           <DevelopmentRoleSwitcher />
           <span className="avatar-link" aria-label="Demo author">SA</span>
         </div>

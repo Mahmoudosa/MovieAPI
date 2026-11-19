@@ -20,7 +20,7 @@ function MovieSection({ title, eyebrow, movies }) {
 }
 
 function Home() {
-  const { movies, profile } = useAppData();
+  const { catalogMovies: movies, profile } = useAppData();
   const featuredMovies = movies.slice(0, 3);
   const popularMovies = [...movies].sort((a, b) => b.rating - a.rating).slice(0, 4);
   const recentMovies = [...movies]

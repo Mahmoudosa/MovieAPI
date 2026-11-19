@@ -13,7 +13,10 @@ function AuthorDashboard() {
     <main className="content portal-content author-content">
       <header className="page-header">
         <div><span className="eyebrow">EDITORIAL STUDIO</span><h1>Welcome, {authorProfile.userName}</h1><p>Shape your next idea into a story for movie fans.</p></div>
-        <Link className="button button-primary" to="/author/articles/new">＋ Create Article</Link>
+        <div className="form-actions">
+          <Link className="button button-secondary" to="/author/movies">＋ Add Movie</Link>
+          <Link className="button button-primary" to="/author/articles/new">＋ Create Article</Link>
+        </div>
       </header>
       <p className="demo-data-notice author-notice">Proposed frontend feature: articles are local demo content. The backend has no confirmed article model or endpoint.</p>
       <section className="admin-stat-grid author-stat-grid">

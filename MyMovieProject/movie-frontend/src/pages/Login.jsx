@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { login } from '../services/authService';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 function Login() {
+  const navigate = useNavigate();
+  const { signIn } = useAuth();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -14,11 +16,10 @@ function Login() {
     setError('');
     setSuccess('');
     setLoading(true);
+
     try {
-      const result = await login(form);
-      setSuccess(result?.token || result?.Token
-        ? 'The API verified your credentials. Connect a token storage strategy to use protected pages.'
-        : 'The API accepted the login request.');
+      await signIn(form);
+      navigate('/movies', { replace: true });
     } catch (requestError) {
       setError(requestError.message);
     } finally {

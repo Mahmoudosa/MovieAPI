@@ -1,11 +1,30 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAppData } from '../../hooks/useAppData';
+import { useAuth } from '../../hooks/useAuth';
 
 const blankMovie = { title: '', director: '', releaseYear: '', categoryId: '' };
 
-function ManageMovies() {
-  const { movies, categories, addMovie, updateMovie, deleteMovie } = useAppData();
+function ManageMovies({ mode = 'admin' }) {
+  const {
+    catalogMovies,
+    catalogCategories,
+    apiLoading,
+    apiError,
+    addMovie,
+    updateMovie,
+    deleteMovie
+  } = useAppData();
+  const { isAuthenticated } = useAuth();
+  const isAuthor = mode === 'author';
+  const movies = useMemo(
+    () => (isAuthenticated ? catalogMovies : []),
+    [catalogMovies, isAuthenticated]
+  );
+  const categories = useMemo(
+    () => (isAuthenticated ? catalogCategories : []),
+    [catalogCategories, isAuthenticated]
+  );
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -51,10 +70,16 @@ function ManageMovies() {
     setSearchParams({});
   };
 
-  const saveMovie = (event) => {
+  const saveMovie = async (event) => {
     event.preventDefault();
+    if (!isAuthenticated) {
+      setError('Sign in first to save movies to the database.');
+      return;
+    }
     const year = Number(form.releaseYear);
-    const category = categories.find((item) => item.id === Number(form.categoryId));
+    const category = categories.find((item) => (
+      item.id === Number(form.categoryId || categories[0]?.id)
+    ));
     if (!category) {
       setError('Choose an existing category.');
       return;
@@ -77,31 +102,46 @@ function ManageMovies() {
       posterTone: editingId ? movies.find((movie) => movie.id === editingId)?.posterTone || 'violet' : 'violet'
     };
 
-    if (editingId) {
-      updateMovie(editingId, movieData);
-      setMessage('Movie changes saved.');
-    } else {
-      addMovie(movieData);
-      setMessage('Movie added to the demo collection.');
-    }
     setError('');
+    setMessage('');
+    const saved = editingId
+      ? await updateMovie(editingId, movieData)
+      : await addMovie(movieData);
+    if (!saved) return;
+
+    if (editingId) {
+      setMessage('Movie changes saved to the database.');
+    } else {
+      setMessage('Movie added to the database.');
+    }
     closeForm();
   };
 
-  const removeMovie = (movie) => {
-    if (!window.confirm(`Delete "${movie.title}" from the demo collection?`)) return;
-    deleteMovie(movie.id);
-    setMessage('Movie deleted.');
+  const removeMovie = async (movie) => {
+    if (!isAuthenticated) {
+      setError('Sign in first to delete movies from the database.');
+      return;
+    }
+    if (!window.confirm(`Delete "${movie.title}" from the database?`)) return;
+    const deleted = await deleteMovie(movie.id);
+    if (!deleted) return;
+    setMessage('Movie deleted from the database.');
     setError('');
   };
 
   return (
     <main className="content portal-content">
       <header className="page-header">
-        <div><span className="eyebrow">CATALOG MANAGEMENT</span><h1>Manage movies</h1><p>Add, update, and remove movies from the shared demo collection.</p></div>
-        <button className="button button-primary" onClick={startAdd}>＋ Add Movie</button>
+        <div><span className="eyebrow">CATALOG MANAGEMENT</span><h1>{isAuthor ? 'Add a movie' : 'Manage movies'}</h1><p>Movies are loaded from and saved to the application database.</p></div>
+        <button className="button button-primary" onClick={startAdd} disabled={!isAuthenticated || apiLoading}>＋ Add Movie</button>
       </header>
-      <p className="demo-data-notice">Demo only: changes are stored in this browser and are not sent to the API.</p>
+      {!isAuthenticated && (
+        <p className="demo-data-notice">
+          Sign in to load and manage database movies. <Link to="/login">Go to login</Link>.
+        </p>
+      )}
+      {apiLoading && <p className="muted-copy" role="status">Loading movies and categories from the database…</p>}
+      {apiError && <p className="error-message" role="alert">{apiError}</p>}
       {message && <p className="success-message" role="status">{message}</p>}
       {error && <p className="error-message" role="alert">{error}</p>}
 
@@ -115,7 +155,7 @@ function ManageMovies() {
             <div><label htmlFor="movie-title">Title</label><input id="movie-title" value={form.title} maxLength="100" onChange={(event) => setForm({ ...form, title: event.target.value })} required /></div>
             <div><label htmlFor="movie-director">Director</label><input id="movie-director" value={form.director} maxLength="100" onChange={(event) => setForm({ ...form, director: event.target.value })} required /></div>
             <div><label htmlFor="movie-year">Release year</label><input id="movie-year" type="number" min="1888" max={new Date().getFullYear() + 10} value={form.releaseYear} onChange={(event) => setForm({ ...form, releaseYear: event.target.value })} required /></div>
-            <div><label htmlFor="movie-category">Category</label><select id="movie-category" value={form.categoryId} onChange={(event) => setForm({ ...form, categoryId: event.target.value })} required><option value="">Select a category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
+            <div><label htmlFor="movie-category">Category</label><select id="movie-category" value={form.categoryId || categories[0]?.id || ''} onChange={(event) => setForm({ ...form, categoryId: event.target.value })} required><option value="">Select a category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
           </div>
           <div className="form-actions"><button className="button button-primary" type="submit">{editingId ? 'Save Changes' : 'Add Movie'}</button><button className="button button-quiet" type="button" onClick={closeForm}>Cancel</button></div>
         </form>
@@ -142,7 +182,7 @@ function ManageMovies() {
                   <td>{movie.director}</td>
                   <td>{movie.releaseYear}</td>
                   <td><span className="table-pill">{movie.categoryName}</span></td>
-                  <td><div className="table-actions"><button className="table-action" onClick={() => startEdit(movie)}>Edit</button><button className="table-action danger" onClick={() => removeMovie(movie)}>Delete</button></div></td>
+                  <td><div className="table-actions"><button className="table-action" onClick={() => startEdit(movie)} disabled={!isAuthenticated}>Edit</button><button className="table-action danger" onClick={() => removeMovie(movie)} disabled={!isAuthenticated}>Delete</button></div></td>
                 </tr>
               ))}
               {!visibleMovies.length && <tr><td colSpan="6" className="table-empty">No movies match your search or category.</td></tr>}

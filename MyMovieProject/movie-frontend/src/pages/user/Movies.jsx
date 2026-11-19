@@ -4,12 +4,14 @@ import MovieCard from '../../components/MovieCard';
 import { useAppData } from '../../hooks/useAppData';
 
 function Movies() {
-  const { movies } = useAppData();
+  const { catalogMovies: movies, catalogCategories } = useAppData();
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get('search') || '';
   const [category, setCategory] = useState('all');
   const [sortBy, setSortBy] = useState('title-asc');
-  const categories = [...new Set(movies.map((movie) => movie.categoryName))].sort();
+  const categories = catalogCategories.length
+    ? catalogCategories.map((item) => item.name).sort()
+    : [...new Set(movies.map((movie) => movie.categoryName))].sort();
 
   const filteredMovies = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();

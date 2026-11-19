@@ -90,7 +90,7 @@ public class AuthController : ControllerBase
         if (user == null ||
             string.IsNullOrEmpty(user.PasswordHash))
         {
-            return Unauthorized("Invalid credentials");
+            return Unauthorized("user name or password is incorrect");
         }
 
         // Verify password

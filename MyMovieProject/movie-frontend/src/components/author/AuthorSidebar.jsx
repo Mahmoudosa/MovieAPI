@@ -4,6 +4,7 @@ const links = [
   { to: '/author', label: 'Dashboard', icon: '⌂', end: true },
   { to: '/author/articles', label: 'My Articles', icon: '▤' },
   { to: '/author/articles/new', label: 'Create Article', icon: '＋' },
+  { to: '/author/movies', label: 'Add Movie', icon: '▣' },
   { to: '/author/profile', label: 'Profile', icon: '◉' }
 ];
 

@@ -124,6 +124,7 @@ public class MoviesController : ControllerBase
     }
 
     // POST: api/movies
+    [Authorize]
     [HttpPost]
     public async Task<ActionResult> AddMovie(MovieDto dto)
     {
@@ -161,6 +162,7 @@ public class MoviesController : ControllerBase
     }
 
     // PUT: api/movies/1
+    [Authorize]
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateMovie(
         int id,
@@ -200,6 +202,7 @@ public class MoviesController : ControllerBase
     }
 
     // DELETE: api/movies/1
+    [Authorize]
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteMovie(int id)
     {

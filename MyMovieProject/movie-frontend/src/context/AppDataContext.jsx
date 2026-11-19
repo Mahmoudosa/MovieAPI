@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import AppDataContext from './AppDataContextValue';
+import { useAuth } from '../hooks/useAuth';
 import {
   defaultAuthorProfile,
   mockArticles,
@@ -7,6 +8,10 @@ import {
   mockReviews,
   mockUsers
 } from '../data/demoManagementData';
+import { getCategories } from '../services/categoryService';
+import { createMovie as createApiMovie, deleteMovie as deleteApiMovie, getMovies, updateMovie as updateApiMovie } from '../services/movieService';
+import { createReview as createApiReview, deleteReview as deleteApiReview, getReviews, updateReview as updateApiReview } from '../services/reviewService';
+import { createWatchlistItem, deleteWatchlistItem, getWatchlists } from '../services/watchlistService';
 
 const storageKeys = {
   watchlist: 'mymovieapp-watchlist',
@@ -23,6 +28,53 @@ const defaultProfile = {
   userName: 'Movie Fan',
   email: 'fan@example.com'
 };
+
+function mapMovie(movie) {
+  return {
+    id: Number(movie.id ?? movie.Id),
+    title: movie.title ?? movie.Title ?? '',
+    director: movie.director ?? movie.Director ?? '',
+    releaseYear: Number(movie.releaseYear ?? movie.ReleaseYear ?? 0),
+    categoryId: Number(movie.categoryId ?? movie.CategoryId ?? 0),
+    categoryName: movie.categoryName ?? movie.CategoryName ?? '',
+    description: movie.description ?? movie.Description ?? '',
+    rating: Number(movie.rating ?? movie.Rating ?? 0),
+    addedAt: movie.addedAt ?? movie.AddedAt ?? '',
+    icon: movie.icon ?? '✦',
+    posterTone: movie.posterTone ?? 'violet'
+  };
+}
+
+function mapCategory(category) {
+  return {
+    id: Number(category.id ?? category.Id),
+    name: category.name ?? category.Name ?? '',
+    description: category.description ?? category.Description ?? ''
+  };
+}
+
+function mapReview(review) {
+  return {
+    id: review.id ?? review.Id,
+    rating: Number(review.rating ?? review.Rating ?? 0),
+    comment: review.comment ?? review.Comment ?? '',
+    movieId: Number(review.movieId ?? review.MovieId),
+    movieTitle: review.movieTitle ?? review.MovieTitle ?? '',
+    userId: Number(review.userId ?? review.UserId),
+    userName: review.userName ?? review.UserName ?? '',
+    createdAt: review.createdAt ?? review.CreatedAt ?? ''
+  };
+}
+
+function mapWatchlist(item) {
+  return {
+    id: item.id ?? item.Id,
+    movieId: Number(item.movieId ?? item.MovieId),
+    userId: Number(item.userId ?? item.UserId),
+    isWatched: Boolean(item.isWatched ?? item.IsWatched),
+    movieTitle: item.movieTitle ?? item.MovieTitle ?? ''
+  };
+}
 
 function readStorage(key, fallback) {
   try {
@@ -49,6 +101,7 @@ function usePersistentState(key, fallback) {
 }
 
 export function AppDataProvider({ children, movies }) {
+  const { isAuthenticated, user, token } = useAuth();
   const [movieList, setMovieList] = usePersistentState(storageKeys.movies, movies);
   const [categories, setCategories] = usePersistentState(storageKeys.categories, mockCategories);
   const [users, setUsers] = usePersistentState(storageKeys.users, mockUsers);
@@ -67,18 +120,172 @@ export function AppDataProvider({ children, movies }) {
     defaultAuthorProfile
   );
   const [demoRole, setDemoRole] = useState('User');
+  const [apiState, setApiState] = useState({
+    token: null,
+    data: null,
+    error: ''
+  });
 
-  const addToWatchlist = (movieId) => {
+  useEffect(() => {
+    let active = true;
+
+    if (!isAuthenticated) return undefined;
+
+    Promise.allSettled([
+      getMovies(),
+      getCategories(),
+      getReviews(),
+      getWatchlists()
+    ]).then((results) => {
+      if (!active) return;
+
+      const [movieResult, categoryResult, reviewResult, watchlistResult] = results;
+      const nextData = {
+        movies: movieResult.status === 'fulfilled'
+          ? movieResult.value.map(mapMovie)
+          : null,
+        categories: categoryResult.status === 'fulfilled'
+          ? categoryResult.value.map(mapCategory)
+          : null,
+        reviews: reviewResult.status === 'fulfilled'
+          ? reviewResult.value.map(mapReview)
+          : null,
+        watchlists: watchlistResult.status === 'fulfilled'
+          ? watchlistResult.value.map(mapWatchlist)
+          : null
+      };
+      const failures = results
+        .filter((result) => result.status === 'rejected')
+        .map((result) => result.reason.message);
+      setApiState({
+        token,
+        data: nextData,
+        error: failures.join(' ')
+      });
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, token]);
+
+  const apiData = isAuthenticated && apiState.token === token
+    ? apiState.data
+    : null;
+  const apiLoading = isAuthenticated && apiData === null;
+  const apiError = isAuthenticated && apiState.token === token ? apiState.error : '';
+
+  const runApiAction = async (action) => {
+    try {
+      await action();
+      setApiState((current) => (
+        current.token === token ? { ...current, error: '' } : current
+      ));
+      return true;
+    } catch (error) {
+      setApiState((current) => (
+        current.token === token
+          ? { ...current, error: error.message }
+          : { ...current, token, error: error.message }
+      ));
+      return false;
+    }
+  };
+
+  const addToWatchlist = async (movieId) => {
+    if (isAuthenticated) {
+      if (!apiData) {
+        setApiState((current) => ({
+          ...current,
+          token,
+          error: 'Please wait for your account data to finish loading.'
+        }));
+        return false;
+      }
+      if (!user?.id) {
+        setApiState((current) => ({
+          ...current,
+          token,
+          error: 'Your login token does not contain a user ID. Please sign in again.'
+        }));
+        return false;
+      }
+      return runApiAction(async () => {
+        const item = await createWatchlistItem({
+          movieId: Number(movieId),
+          userId: user.id,
+          isWatched: false
+        });
+        setApiState((current) => ({
+          ...current,
+          data: {
+            ...current.data,
+            watchlists: [...(current.data?.watchlists ?? []), mapWatchlist(item)]
+          }
+        }));
+      });
+    }
     setWatchlistIds((current) => (
       current.includes(movieId) ? current : [...current, movieId]
     ));
+    return true;
   };
 
-  const removeFromWatchlist = (movieId) => {
+  const removeFromWatchlist = async (movieId) => {
+    if (isAuthenticated) {
+      const item = apiData?.watchlists?.find((entry) => entry.movieId === Number(movieId));
+      if (!item) return false;
+      return runApiAction(async () => {
+        await deleteWatchlistItem(item.id);
+        setApiState((current) => ({
+          ...current,
+          data: {
+            ...current.data,
+            watchlists: current.data.watchlists.filter((entry) => entry.id !== item.id)
+          }
+        }));
+      });
+    }
     setWatchlistIds((current) => current.filter((id) => id !== movieId));
+    return true;
   };
 
-  const addReview = ({ movieId, rating, comment }) => {
+  const addReview = async ({ movieId, rating, comment }) => {
+    if (isAuthenticated) {
+      if (!apiData) {
+        setApiState((current) => ({
+          ...current,
+          token,
+          error: 'Please wait for your account data to finish loading.'
+        }));
+        return false;
+      }
+      if (!user?.id) {
+        setApiState((current) => ({
+          ...current,
+          token,
+          error: 'Your login token does not contain a user ID. Please sign in again.'
+        }));
+        return false;
+      }
+      let savedReview;
+      const succeeded = await runApiAction(async () => {
+        savedReview = mapReview(await createApiReview({
+          rating: Number(rating),
+          comment: comment.trim(),
+          movieId: Number(movieId),
+          userId: user.id
+        }));
+        setApiState((current) => ({
+          ...current,
+          data: {
+            ...current.data,
+            reviews: [savedReview, ...(current.data?.reviews ?? [])]
+          }
+        }));
+      });
+      return succeeded ? savedReview : false;
+    }
     const review = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       movieId,
@@ -92,7 +299,37 @@ export function AppDataProvider({ children, movies }) {
     return review;
   };
 
-  const updateReview = (reviewId, changes) => {
+  const updateReview = async (reviewId, changes) => {
+    if (isAuthenticated) {
+      const review = apiData?.reviews?.find((entry) => entry.id === reviewId);
+      if (!review || review.userId !== user?.id) {
+        setApiState((current) => ({
+          ...current,
+          token,
+          error: 'You can only edit your own reviews.'
+        }));
+        return false;
+      }
+      let updatedReview;
+      const succeeded = await runApiAction(async () => {
+        updatedReview = mapReview(await updateApiReview(reviewId, {
+          rating: Number(changes.rating),
+          comment: changes.comment.trim(),
+          movieId: review.movieId,
+          userId: review.userId
+        }));
+        setApiState((current) => ({
+          ...current,
+          data: {
+            ...current.data,
+            reviews: current.data.reviews.map((entry) => (
+              entry.id === reviewId ? updatedReview : entry
+            ))
+          }
+        }));
+      });
+      return succeeded ? updatedReview : false;
+    }
     setReviews((current) => current.map((review) => (
       review.id === reviewId
         ? { ...review, ...changes, rating: Number(changes.rating) }
@@ -100,11 +337,68 @@ export function AppDataProvider({ children, movies }) {
     )));
   };
 
-  const deleteReview = (reviewId) => {
+  const deleteReview = async (reviewId) => {
+    if (isAuthenticated) {
+      const review = apiData?.reviews?.find((entry) => entry.id === reviewId);
+      if (!review || review.userId !== user?.id) {
+        setApiState((current) => ({
+          ...current,
+          token,
+          error: 'You can only delete your own reviews.'
+        }));
+        return false;
+      }
+      return runApiAction(async () => {
+        await deleteApiReview(reviewId);
+        setApiState((current) => ({
+          ...current,
+          data: {
+            ...current.data,
+            reviews: current.data.reviews.filter((entry) => entry.id !== reviewId)
+          }
+        }));
+      });
+    }
     setReviews((current) => current.filter((review) => review.id !== reviewId));
+    return true;
   };
 
-  const addMovie = (movieData) => {
+  const addMovie = async (movieData) => {
+    if (isAuthenticated) {
+      if (!apiData?.categories) {
+        setApiState((current) => ({
+          ...current,
+          token,
+          error: 'Movie data is still loading. Please try again shortly.'
+        }));
+        return false;
+      }
+
+      let savedMovie;
+      const succeeded = await runApiAction(async () => {
+        const result = await createApiMovie({
+          title: movieData.title,
+          director: movieData.director,
+          releaseYear: Number(movieData.releaseYear),
+          categoryId: Number(movieData.categoryId)
+        });
+        savedMovie = mapMovie({
+          ...result,
+          CategoryName: apiData.categories.find(
+            (category) => category.id === Number(movieData.categoryId)
+          )?.name ?? movieData.categoryName
+        });
+        setApiState((current) => ({
+          ...current,
+          data: {
+            ...current.data,
+            movies: [...(current.data?.movies ?? []), savedMovie]
+          }
+        }));
+      });
+      return succeeded ? savedMovie : false;
+    }
+
     const movie = {
       ...movieData,
       id: Math.max(0, ...movieList.map((item) => item.id)) + 1,
@@ -115,16 +409,81 @@ export function AppDataProvider({ children, movies }) {
     return movie;
   };
 
-  const updateMovie = (movieId, changes) => {
+  const updateMovie = async (movieId, changes) => {
+    if (isAuthenticated) {
+      const currentMovie = apiData?.movies?.find((movie) => movie.id === Number(movieId));
+      const category = apiData?.categories?.find(
+        (item) => item.id === Number(changes.categoryId)
+      );
+      if (!currentMovie || !category) {
+        setApiState((current) => ({
+          ...current,
+          token,
+          error: 'Choose a movie and an existing database category.'
+        }));
+        return false;
+      }
+
+      let updatedMovie;
+      const succeeded = await runApiAction(async () => {
+        const result = await updateApiMovie(movieId, {
+          title: changes.title,
+          director: changes.director,
+          releaseYear: Number(changes.releaseYear),
+          categoryId: Number(changes.categoryId)
+        });
+        updatedMovie = mapMovie({
+          ...currentMovie,
+          ...result,
+          CategoryName: category.name
+        });
+        setApiState((current) => ({
+          ...current,
+          data: {
+            ...current.data,
+            movies: current.data.movies.map((movie) => (
+              movie.id === Number(movieId) ? updatedMovie : movie
+            ))
+          }
+        }));
+      });
+      return succeeded ? updatedMovie : false;
+    }
+
     setMovieList((current) => current.map((movie) => (
       movie.id === movieId ? { ...movie, ...changes } : movie
     )));
+    return true;
   };
 
-  const deleteMovie = (movieId) => {
+  const deleteMovie = async (movieId) => {
+    if (isAuthenticated) {
+      if (!apiData?.movies?.some((movie) => movie.id === Number(movieId))) {
+        setApiState((current) => ({
+          ...current,
+          token,
+          error: 'The movie is not available in the database list.'
+        }));
+        return false;
+      }
+      return runApiAction(async () => {
+        await deleteApiMovie(movieId);
+        setApiState((current) => ({
+          ...current,
+          data: {
+            ...current.data,
+            movies: current.data.movies.filter((movie) => movie.id !== Number(movieId)),
+            watchlists: current.data.watchlists?.filter((item) => item.movieId !== Number(movieId)),
+            reviews: current.data.reviews?.filter((review) => review.movieId !== Number(movieId))
+          }
+        }));
+      });
+    }
+
     setMovieList((current) => current.filter((movie) => movie.id !== movieId));
     setWatchlistIds((current) => current.filter((id) => id !== movieId));
     setReviews((current) => current.filter((review) => review.movieId !== movieId));
+    return true;
   };
 
   const addCategory = (categoryData) => {
@@ -187,16 +546,38 @@ export function AppDataProvider({ children, movies }) {
     setArticles((current) => current.filter((article) => article.id !== articleId));
   };
 
+  const catalogMovies = isAuthenticated ? apiData?.movies ?? [] : movieList;
+  const catalogCategories = isAuthenticated ? apiData?.categories ?? [] : categories;
+  const userReviews = isAuthenticated
+    ? (apiData?.reviews ?? []).filter((review) => review.userId === user?.id)
+    : reviews.filter((review) => review.userId === 1 || review.userName === profile.userName);
+  const watchlistIdsForUser = isAuthenticated
+    ? (apiData?.watchlists ?? []).map((item) => item.movieId)
+    : watchlistIds;
+  const activeProfile = isAuthenticated
+    ? {
+      ...profile,
+      userName: user.userName || profile.userName,
+      email: user.email || profile.email
+    }
+    : profile;
+
   const value = {
-    movies: movieList,
+    movies: catalogMovies,
+    catalogMovies,
     setMovies: setMovieList,
-    categories,
+    categories: catalogCategories,
+    catalogCategories,
     users,
-    watchlistIds,
-    watchlist: movieList.filter((movie) => watchlistIds.includes(movie.id)),
+    watchlistIds: watchlistIdsForUser,
+    watchlist: catalogMovies.filter((movie) => watchlistIdsForUser.includes(movie.id)),
     reviews,
-    profile,
+    catalogReviews: isAuthenticated ? apiData?.reviews ?? [] : reviews,
+    userReviews,
+    profile: activeProfile,
     setProfile,
+    apiLoading,
+    apiError,
     articles,
     authorProfile,
     setAuthorProfile,

@@ -6,8 +6,8 @@ function MovieDetails() {
   const { id } = useParams();
   const movieId = Number(id);
   const {
-    movies,
-    reviews,
+    catalogMovies: movies,
+    catalogReviews: reviews,
     profile,
     watchlistIds,
     addToWatchlist,
@@ -33,10 +33,11 @@ function MovieDetails() {
     );
   }
 
-  const submitReview = (event) => {
+  const submitReview = async (event) => {
     event.preventDefault();
     if (!comment.trim()) return;
-    addReview({ movieId, rating, comment });
+    const savedReview = await addReview({ movieId, rating, comment });
+    if (!savedReview) return;
     setComment('');
     setReviewMessage('Your review has been saved.');
   };

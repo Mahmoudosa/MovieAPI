@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppData } from '../../hooks/useAppData';
+import { useAuth } from '../../hooks/useAuth';
 
 function Profile() {
-  const { profile, setProfile, watchlist, reviews } = useAppData();
+  const { profile, setProfile, watchlist, userReviews } = useAppData();
+  const { isAuthenticated } = useAuth();
   const [form, setForm] = useState(profile);
   const [message, setMessage] = useState('');
 
@@ -28,7 +30,7 @@ function Profile() {
           {profile.userName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}
         </div>
         <div>
-          <span className="eyebrow">DEMO ACCOUNT</span>
+          <span className="eyebrow">{isAuthenticated ? 'SIGNED-IN ACCOUNT' : 'DEMO ACCOUNT'}</span>
           <h2>{profile.userName}</h2>
           <p>{profile.email}</p>
         </div>
@@ -42,7 +44,7 @@ function Profile() {
         </Link>
         <Link className="stat-card" to="/my-reviews">
           <span className="stat-icon" aria-hidden="true">✎</span>
-          <span className="stat-value">{reviews.length}</span>
+          <span className="stat-value">{userReviews.length}</span>
           <span className="stat-label">Reviews written</span>
         </Link>
       </section>
@@ -50,7 +52,7 @@ function Profile() {
       <section className="panel profile-edit">
         <div className="section-heading">
           <div>
-            <span className="eyebrow">PROFILE PREFERENCES</span>
+            <span className="eyebrow">LOCAL PROFILE PREFERENCES</span>
             <h2>Edit profile</h2>
           </div>
         </div>
@@ -83,7 +85,10 @@ function Profile() {
             <button className="button button-primary" type="submit">Save Changes</button>
           </div>
         </form>
-        <p className="form-note">These are local demo preferences and are not saved to your API account.</p>
+        <p className="form-note">
+          These preferences are saved only in this browser; the API does not yet
+          provide an authenticated profile-editing endpoint.
+        </p>
       </section>
     </main>
   );

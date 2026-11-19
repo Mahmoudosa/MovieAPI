@@ -25,14 +25,16 @@ import AuthorProfile from './pages/author/AuthorProfile';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { AppDataProvider } from './context/AppDataContext';
+import { AuthProvider } from './context/AuthContext';
 import { mockMovies } from './data/mockMovies';
 
 import './App.css';
 
 function App() {
   return (
-    <AppDataProvider movies={mockMovies}>
-      <Routes>
+    <AuthProvider>
+      <AppDataProvider movies={mockMovies}>
+        <Routes>
         <Route element={<UserLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/movies" element={<Movies />} />
@@ -55,6 +57,7 @@ function App() {
           <Route path="articles" element={<MyArticles />} />
           <Route path="articles/new" element={<CreateArticle />} />
           <Route path="articles/:id/edit" element={<EditArticle />} />
+          <Route path="movies" element={<ManageMovies mode="author" />} />
           <Route path="profile" element={<AuthorProfile />} />
         </Route>
 
@@ -84,8 +87,9 @@ function App() {
             </main>
           }
         />
-      </Routes>
-    </AppDataProvider>
+        </Routes>
+      </AppDataProvider>
+    </AuthProvider>
   );
 }
 

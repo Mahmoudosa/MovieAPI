@@ -3,13 +3,16 @@ import { Link } from 'react-router-dom';
 import { useAppData } from '../../hooks/useAppData';
 
 function MyReviews() {
-  const { movies, reviews, profile, updateReview, deleteReview } = useAppData();
+  const {
+    catalogMovies: movies,
+    userReviews: reviews,
+    updateReview,
+    deleteReview
+  } = useAppData();
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState({ rating: 5, comment: '' });
   const [message, setMessage] = useState('');
-  const sortedReviews = reviews.filter((review) => (
-    review.userId === 1 || review.userName === profile.userName
-  )).sort(
+  const sortedReviews = [...reviews].sort(
     (first, second) => new Date(second.createdAt) - new Date(first.createdAt)
   );
 
@@ -19,10 +22,11 @@ function MyReviews() {
     setMessage('');
   };
 
-  const saveEdit = (event, reviewId) => {
+  const saveEdit = async (event, reviewId) => {
     event.preventDefault();
     if (!draft.comment.trim()) return;
-    updateReview(reviewId, draft);
+    const updated = await updateReview(reviewId, draft);
+    if (!updated) return;
     setEditingId(null);
     setMessage('Review updated.');
   };
@@ -90,16 +94,16 @@ function MyReviews() {
                   <>
                     <p className="review-comment">{review.comment}</p>
                     <p className="review-date">
-                      {new Date(review.createdAt).toLocaleDateString()}
+                      {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : ''}
                     </p>
                     <div className="form-actions">
                       <Link className="button button-secondary" to={`/movies/${movie.id}`}>View Movie</Link>
                       <button className="button button-quiet" onClick={() => beginEdit(review)}>Edit Review</button>
                       <button
                         className="button button-danger-quiet"
-                        onClick={() => {
-                          deleteReview(review.id);
-                          setMessage('Review deleted.');
+                        onClick={async () => {
+                          const deleted = await deleteReview(review.id);
+                          if (deleted) setMessage('Review deleted.');
                         }}
                       >
                         Delete Review

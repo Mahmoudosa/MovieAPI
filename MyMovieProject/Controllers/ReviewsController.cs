@@ -1,5 +1,7 @@
 
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
 using MyMovieApp.Repositories.Interfaces;
@@ -59,9 +61,14 @@ public class ReviewsController : ControllerBase
     }
 
     // POST: api/reviews
+    [Authorize]
     [HttpPost]
     public async Task<ActionResult> AddReview(ReviewDto dto)
     {
+        int? currentUserId = GetCurrentUserId();
+        if (currentUserId is null || dto.UserId != currentUserId.Value)
+            return Forbid();
+
         if (dto.Rating < 1 || dto.Rating > 5)
             return BadRequest("Rating must be between 1 and 5.");
 
@@ -98,6 +105,7 @@ public class ReviewsController : ControllerBase
     }
 
     // PUT: api/reviews/1
+    [Authorize]
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateReview(
         int id, ReviewDto dto)
@@ -106,6 +114,12 @@ public class ReviewsController : ControllerBase
 
         if (review == null)
             return NotFound();
+
+        int? currentUserId = GetCurrentUserId();
+        if (currentUserId is null ||
+            review.UserId != currentUserId.Value ||
+            dto.UserId != currentUserId.Value)
+            return Forbid();
 
         if (dto.Rating < 1 || dto.Rating > 5)
             return BadRequest("Rating must be between 1 and 5.");
@@ -137,6 +151,7 @@ public class ReviewsController : ControllerBase
     }
 
     // DELETE: api/reviews/1
+    [Authorize]
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteReview(int id)
     {
@@ -145,8 +160,17 @@ public class ReviewsController : ControllerBase
         if (review == null)
             return NotFound();
 
+        if (review.UserId != GetCurrentUserId())
+            return Forbid();
+
         await _reviewRepository.DeleteAsync(review);
 
         return NoContent();
+    }
+
+    private int? GetCurrentUserId()
+    {
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(claim, out var userId) ? userId : null;
     }
 }
