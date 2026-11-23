@@ -6,11 +6,14 @@ namespace MyMovieApp.Models
         public string Title { get; set; } = string.Empty;
         public string Director { get; set; } = string.Empty;
         public int ReleaseYear { get; set; }
+        public string? Description { get; set; }    
 
         public int CategoryId { get; set; }
         public Category Category { get; set; } = null!;
 
         public ICollection<Review> Reviews { get; set; } = new List<Review>();
         public ICollection<Watchlist> Watchlists { get; set; } = new List<Watchlist>();
+        public DateTime? CreatedAtUtc { get; set; }
+        public DateTime? UpdatedAtUtc { get; set; }
     }
 }

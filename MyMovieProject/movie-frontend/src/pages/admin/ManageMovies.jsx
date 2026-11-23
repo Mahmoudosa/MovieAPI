@@ -3,7 +3,13 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAppData } from '../../hooks/useAppData';
 import { useAuth } from '../../hooks/useAuth';
 
-const blankMovie = { title: '', director: '', releaseYear: '', categoryId: '' };
+const blankMovie = {
+  title: '',
+  director: '',
+  releaseYear: '',
+  categoryId: '',
+  description: ''
+};
 
 function ManageMovies({ mode = 'admin' }) {
   const {
@@ -57,7 +63,8 @@ function ManageMovies({ mode = 'admin' }) {
       title: movie.title,
       director: movie.director,
       releaseYear: String(movie.releaseYear),
-      categoryId: String(movie.categoryId || '')
+      categoryId: String(movie.categoryId || ''),
+      description: movie.description || ''
     });
     setMessage('');
     setError('');
@@ -95,9 +102,7 @@ function ManageMovies({ mode = 'admin' }) {
       releaseYear: year,
       categoryId: category.id,
       categoryName: category.name,
-      description: editingId
-        ? movies.find((movie) => movie.id === editingId)?.description || ''
-        : '',
+      description: form.description.trim(),
       icon: editingId ? movies.find((movie) => movie.id === editingId)?.icon || '✦' : '✦',
       posterTone: editingId ? movies.find((movie) => movie.id === editingId)?.posterTone || 'violet' : 'violet'
     };
@@ -156,6 +161,7 @@ function ManageMovies({ mode = 'admin' }) {
             <div><label htmlFor="movie-director">Director</label><input id="movie-director" value={form.director} maxLength="100" onChange={(event) => setForm({ ...form, director: event.target.value })} required /></div>
             <div><label htmlFor="movie-year">Release year</label><input id="movie-year" type="number" min="1888" max={new Date().getFullYear() + 10} value={form.releaseYear} onChange={(event) => setForm({ ...form, releaseYear: event.target.value })} required /></div>
             <div><label htmlFor="movie-category">Category</label><select id="movie-category" value={form.categoryId || categories[0]?.id || ''} onChange={(event) => setForm({ ...form, categoryId: event.target.value })} required><option value="">Select a category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div>
+            <div className="form-span"><label htmlFor="movie-description">Description (optional)</label><textarea id="movie-description" rows="4" maxLength="2000" placeholder="Add a short description of the movie" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></div>
           </div>
           <div className="form-actions"><button className="button button-primary" type="submit">{editingId ? 'Save Changes' : 'Add Movie'}</button><button className="button button-quiet" type="button" onClick={closeForm}>Cancel</button></div>
         </form>

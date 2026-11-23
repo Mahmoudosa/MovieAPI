@@ -380,7 +380,8 @@ export function AppDataProvider({ children, movies }) {
           title: movieData.title,
           director: movieData.director,
           releaseYear: Number(movieData.releaseYear),
-          categoryId: Number(movieData.categoryId)
+          categoryId: Number(movieData.categoryId),
+          description: movieData.description
         });
         savedMovie = mapMovie({
           ...result,
@@ -430,7 +431,8 @@ export function AppDataProvider({ children, movies }) {
           title: changes.title,
           director: changes.director,
           releaseYear: Number(changes.releaseYear),
-          categoryId: Number(changes.categoryId)
+          categoryId: Number(changes.categoryId),
+          description: changes.description
         });
         updatedMovie = mapMovie({
           ...currentMovie,

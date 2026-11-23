@@ -15,5 +15,10 @@ namespace MyMovieApp.Repositories.Interfaces
         Task UpdateAsync(Movie movie);
 
         Task DeleteAsync(Movie movie);
+        Task<(List<Movie> Movies, int TotalCount)> SearchAsync(
+        string? search,
+        int? categoryId,
+        int page,
+        int pageSize);
     }
 }

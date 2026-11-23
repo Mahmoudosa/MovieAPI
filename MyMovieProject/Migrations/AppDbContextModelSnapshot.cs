@@ -54,6 +54,12 @@ namespace MyMovieProject.Migrations
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("Director")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -63,11 +69,17 @@ namespace MyMovieProject.Migrations
 
                     b.Property<string>("Title")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("Title")
+                        .HasDatabaseName("IX_Movies_Title");
 
                     b.ToTable("Movies");
                 });

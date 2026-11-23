@@ -57,7 +57,8 @@ public class MoviesController : ControllerBase
             Director = m.Director,
             ReleaseYear = m.ReleaseYear,
             CategoryId = m.CategoryId,
-            CategoryName = m.Category.Name
+            CategoryName = m.Category.Name ,
+            Description = m.Description
         }).ToList();
 
         // 3. Save JSON to Redis
@@ -72,6 +73,59 @@ public class MoviesController : ControllerBase
 
         return Ok(resultFromDb);
     }
+
+    
+    // GET: api/movies/search
+    [Authorize]
+    [HttpGet("search")]
+    public async Task<ActionResult> SearchMovies(
+        [FromQuery] string? search,
+        [FromQuery] int? categoryId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
+    {
+        // 1. Validate pagination parameters
+        if (page < 1)
+            return BadRequest("Page must be at least 1.");
+
+        if (pageSize < 1 || pageSize > 100)
+            return BadRequest("PageSize must be between 1 and 100.");
+
+        // 2. Call repository
+        var (movies, totalCount) =
+            await _movieRepository.SearchAsync(
+                search,
+                categoryId,
+                page,
+                pageSize);
+
+        // 3. Convert Movie entities to DTOs
+        var movieDtos = movies.Select(m => new MovieResponseDto
+        {
+            Id = m.Id,
+            Title = m.Title,
+            Director = m.Director,
+            ReleaseYear = m.ReleaseYear,
+            CategoryId = m.CategoryId,
+            CategoryName = m.Category.Name,
+            Description = m.Description
+        }).ToList();
+
+        // 4. Calculate number of pages
+        int totalPages = (int)Math.Ceiling(
+            (double)totalCount / pageSize);
+
+        // 5. Return pagination information
+        return Ok(new
+        {
+            Items = movieDtos,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            TotalPages = totalPages
+        });
+    }
+
 
     // GET: api/movies/1
     [HttpGet("{id}")]
@@ -107,7 +161,8 @@ public class MoviesController : ControllerBase
             Director = movie.Director,
             ReleaseYear = movie.ReleaseYear,
             CategoryId = movie.CategoryId,
-            CategoryName = movie.Category.Name
+            CategoryName = movie.Category.Name,
+            Description = movie.Description
         };
 
         // 3. Save to Redis
@@ -140,7 +195,8 @@ public class MoviesController : ControllerBase
             Title = dto.Title,
             Director = dto.Director,
             ReleaseYear = dto.ReleaseYear,
-            CategoryId = dto.CategoryId
+            CategoryId = dto.CategoryId,
+            Description = dto.Description
         };
 
         await _movieRepository.AddAsync(movie);
@@ -157,7 +213,8 @@ public class MoviesController : ControllerBase
                 movie.Title,
                 movie.Director,
                 movie.ReleaseYear,
-                movie.CategoryId
+                movie.CategoryId,
+                movie.Description
             });
     }
 
@@ -184,6 +241,7 @@ public class MoviesController : ControllerBase
         movie.Director = dto.Director;
         movie.ReleaseYear = dto.ReleaseYear;
         movie.CategoryId = dto.CategoryId;
+        movie.Description = dto.Description;
 
         await _movieRepository.UpdateAsync(movie);
 
