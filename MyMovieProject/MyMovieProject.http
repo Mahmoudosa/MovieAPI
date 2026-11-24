@@ -4,3 +4,28 @@ GET {{MyMovieProject_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+@movieApiToken = paste-a-valid-jwt-here
+
+### Search movies with title, category, and pagination (requires JWT)
+GET {{MyMovieProject_HostAddress}}/api/movies/search?search=Batman&categoryId=2&page=1&pageSize=20
+Authorization: Bearer {{movieApiToken}}
+Accept: application/json
+
+###
+
+### List users (requires Admin JWT)
+GET {{MyMovieProject_HostAddress}}/api/users
+Authorization: Bearer {{movieApiToken}}
+Accept: application/json
+
+### Change a user's role (requires Admin JWT)
+PUT {{MyMovieProject_HostAddress}}/api/users/1/role
+Authorization: Bearer {{movieApiToken}}
+Content-Type: application/json
+
+{
+  "role": "Author"
+}
+
+###

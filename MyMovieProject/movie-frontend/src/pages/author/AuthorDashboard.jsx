@@ -1,46 +1,57 @@
 import { Link } from 'react-router-dom';
 import { useAppData } from '../../hooks/useAppData';
+import { useAuth } from '../../hooks/useAuth';
 
 function AuthorDashboard() {
-  const { articles, authorProfile, movies } = useAppData();
-  const published = articles.filter((article) => article.status === 'Published').length;
-  const drafts = articles.filter((article) => article.status === 'Draft').length;
-  const recentArticles = [...articles].sort(
-    (first, second) => new Date(second.updatedAt) - new Date(first.updatedAt)
-  ).slice(0, 4);
+  const { catalogMovies, apiLoading, apiError } = useAppData();
+  const { user, isAuthenticated } = useAuth();
+  const authorMovies = isAuthenticated
+    ? catalogMovies.filter((movie) => movie.ownerUserId === user.id)
+    : [];
+  const hasAuthorAccess = isAuthenticated && user?.role === 'Author';
+  const recentMovies = [...authorMovies]
+    .sort((first, second) => second.id - first.id)
+    .slice(0, 5);
 
   return (
     <main className="content portal-content author-content">
       <header className="page-header">
-        <div><span className="eyebrow">EDITORIAL STUDIO</span><h1>Welcome, {authorProfile.userName}</h1><p>Shape your next idea into a story for movie fans.</p></div>
+        <div><span className="eyebrow">MOVIE STUDIO</span><h1>Manage movies</h1><p>Create movies and manage your movies.</p></div>
         <div className="form-actions">
-          <Link className="button button-secondary" to="/author/movies">＋ Add Movie</Link>
-          <Link className="button button-primary" to="/author/articles/new">＋ Create Article</Link>
+          <Link className="button button-secondary" to="/author/movies">Manage Movies</Link>
+          <Link className="button button-primary" to="/author/movies?new=1">＋ Add Movie</Link>
         </div>
       </header>
-      <p className="demo-data-notice author-notice">Proposed frontend feature: articles are local demo content. The backend has no confirmed article model or endpoint.</p>
+      {!hasAuthorAccess && (
+        <p className="demo-data-notice author-notice" role="status">
+          Sign in with an Author account to manage your movies.
+          {!isAuthenticated && <> <Link to="/login">Go to login</Link>.</>}
+          {isAuthenticated && <> Your current role is {user.role}.</>}
+        </p>
+      )}
+      {apiLoading && <p className="muted-copy" role="status">Loading movies from the database…</p>}
+      {apiError && <p className="error-message" role="alert">{apiError}</p>}
       <section className="admin-stat-grid author-stat-grid">
-        <div className="admin-stat-card"><span className="admin-stat-icon">▤</span><span className="admin-stat-value">{articles.length}</span><span className="admin-stat-label">Total articles</span></div>
-        <div className="admin-stat-card"><span className="admin-stat-icon">◉</span><span className="admin-stat-value">{published}</span><span className="admin-stat-label">Published</span></div>
-        <div className="admin-stat-card"><span className="admin-stat-icon">✎</span><span className="admin-stat-value">{drafts}</span><span className="admin-stat-label">Drafts</span></div>
+        <div className="admin-stat-card"><span className="admin-stat-icon">▣</span><span className="admin-stat-value">{authorMovies.length}</span><span className="admin-stat-label">Your movies</span></div>
       </section>
       <section className="admin-panel">
         <div className="admin-panel-heading">
-          <div><span className="eyebrow">YOUR WRITING</span><h2>Recent articles</h2></div>
-          <Link className="text-link" to="/author/articles">View all →</Link>
+          <div><span className="eyebrow">DATABASE</span><h2>Your movies</h2></div>
+          <Link className="text-link" to="/author/movies">Manage movies →</Link>
         </div>
         <div className="article-list">
-          {recentArticles.map((article) => {
-            const movie = movies.find((item) => item.id === Number(article.relatedMovieId));
-            return (
-              <article className="article-row" key={article.id}>
-                <div className="article-row-main"><h3>{article.title}</h3><p>{article.summary}</p><small>{movie ? `Related to ${movie.title} · ` : ''}Updated {new Date(article.updatedAt).toLocaleDateString()}</small></div>
-                <span className={`status-pill ${article.status === 'Published' ? 'status-enabled' : 'status-draft'}`}>{article.status}</span>
-                <Link className="table-action" to={`/author/articles/${article.id}/edit`}>Edit</Link>
-              </article>
-            );
-          })}
-          {!articles.length && <div className="table-empty">No articles yet. Create your first story.</div>}
+          {recentMovies.map((movie) => (
+            <article className="article-row" key={movie.id}>
+              <div className="article-row-main">
+                <h3>{movie.title}</h3>
+                <p>{movie.director} · {movie.releaseYear} · {movie.categoryName}</p>
+              </div>
+              <Link className="table-action" to="/author/movies">Manage</Link>
+            </article>
+          ))}
+          {!apiLoading && !apiError && !authorMovies.length && (
+            <div className="table-empty">You haven't created any movies yet. Add your first movie.</div>
+          )}
         </div>
       </section>
     </main>

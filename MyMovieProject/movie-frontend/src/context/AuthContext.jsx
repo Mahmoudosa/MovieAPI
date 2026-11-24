@@ -21,6 +21,14 @@ function decodeUser(token) {
     const identifier = payload.nameid
       ?? payload.sub
       ?? payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
+    const roleClaim = payload.role
+      ?? payload['http://schemas.microsoft.com/ws/2008/06/identity/claims/role']
+      ?? 'User';
+    const normalizedRole = {
+      admin: 'Admin',
+      author: 'Author',
+      user: 'User'
+    }[String(roleClaim).trim().toLowerCase()] ?? 'User';
 
     return {
       id: identifier ? Number(identifier) : null,
@@ -30,7 +38,8 @@ function decodeUser(token) {
         ?? '',
       email: payload.email
         ?? payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress']
-        ?? ''
+        ?? '',
+      role: normalizedRole
     };
   } catch {
     return null;

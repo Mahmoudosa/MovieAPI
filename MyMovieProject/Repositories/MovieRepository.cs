@@ -59,11 +59,18 @@ namespace MyMovieApp.Repositories
             string? search,
             int? categoryId,
             int page,
-            int pageSize)
+            int pageSize,
+            int? ownerUserId = null)
         {
             IQueryable<Movie> query = _context.Movies
                 .Include(m => m.Category)
                 .AsNoTracking();
+
+            if (ownerUserId.HasValue)
+            {
+                query = query.Where(m =>
+                    m.OwnerUserId == ownerUserId.Value);
+            }
 
             // 1. Search anywhere in the movie title
             if (!string.IsNullOrWhiteSpace(search))

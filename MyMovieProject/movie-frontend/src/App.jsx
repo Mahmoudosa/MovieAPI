@@ -17,9 +17,6 @@ import ManageUsers from './pages/admin/ManageUsers';
 import ModerateReviews from './pages/admin/ModerateReviews';
 import AuthorLayout from './layouts/AuthorLayout';
 import AuthorDashboard from './pages/author/AuthorDashboard';
-import MyArticles from './pages/author/MyArticles';
-import CreateArticle from './pages/author/CreateArticle';
-import EditArticle from './pages/author/EditArticle';
 import AuthorProfile from './pages/author/AuthorProfile';
 
 import Login from './pages/Login';
@@ -54,9 +51,6 @@ function App() {
 
         <Route path="/author" element={<AuthorLayout />}>
           <Route index element={<AuthorDashboard />} />
-          <Route path="articles" element={<MyArticles />} />
-          <Route path="articles/new" element={<CreateArticle />} />
-          <Route path="articles/:id/edit" element={<EditArticle />} />
           <Route path="movies" element={<ManageMovies mode="author" />} />
           <Route path="profile" element={<AuthorProfile />} />
         </Route>

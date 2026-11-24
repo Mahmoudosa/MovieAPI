@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using MyMovieApp.Repositories.Interfaces;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
+using MyMovieApp.Configuration;
 // Add the namespaces for your User, RegisterDto, and LoginDto
 // if they aren't already available.
 
@@ -58,7 +59,8 @@ public class AuthController : ControllerBase
         var user = new User
         {
             UserName = dto.UserName,
-            Email = dto.Email
+            Email = dto.Email,
+            Role = UserRoles.User
         };
 
         // Hash password
@@ -118,7 +120,11 @@ public class AuthController : ControllerBase
 
             new Claim(
                 ClaimTypes.Email,
-                user.Email)
+                user.Email),
+
+            new Claim(
+                ClaimTypes.Role,
+                UserRoles.Normalize(user.Role))
         };
 
         // Get JWT key
@@ -147,7 +153,8 @@ public class AuthController : ControllerBase
             Token = new JwtSecurityTokenHandler()
                 .WriteToken(token),
 
-            ExpiresInMinutes = 30
+            ExpiresInMinutes = 30,
+            Role = UserRoles.Normalize(user.Role)
         });
     }
 }

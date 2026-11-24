@@ -1,7 +1,7 @@
 import { apiRequest } from './apiClient';
 
-export function getUsers() {
-  return apiRequest('/api/users');
+export function getUsers(options) {
+  return apiRequest('/api/users', options);
 }
 
 export function getUser(id) {
@@ -19,6 +19,13 @@ export function updateUser(id, user) {
   return apiRequest(`/api/users/${id}`, {
     method: 'PUT',
     body: JSON.stringify(user)
+  });
+}
+
+export function updateUserRole(id, role) {
+  return apiRequest(`/api/users/${id}/role`, {
+    method: 'PUT',
+    body: JSON.stringify({ role })
   });
 }
 

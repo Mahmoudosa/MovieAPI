@@ -6,6 +6,9 @@ using System.Text.Json;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
 using MyMovieApp.Repositories.Interfaces;
+using MyMovieApp.Configuration;
+using Microsoft.Extensions.Options;
+using System.Security.Claims;
 
 namespace MyMovieApp.Controllers;
 
@@ -15,15 +18,18 @@ public class MoviesController : ControllerBase
 {
     private readonly IMovieRepository _movieRepository;
     private readonly IDistributedCache _cache;
+    private readonly IOptionsMonitor<FeatureFlags> _featureFlags;
 
     private const string MoviesCacheKey = "movies_all";
 
     public MoviesController(
         IMovieRepository movieRepository,
-        IDistributedCache cache)
+        IDistributedCache cache,
+        IOptionsMonitor<FeatureFlags> featureFlags)
     {
         _movieRepository = movieRepository;
         _cache = cache;
+        _featureFlags = featureFlags;
     }
 
     // GET: api/movies
@@ -58,7 +64,8 @@ public class MoviesController : ControllerBase
             ReleaseYear = m.ReleaseYear,
             CategoryId = m.CategoryId,
             CategoryName = m.Category.Name ,
-            Description = m.Description
+            Description = m.Description,
+            OwnerUserId = m.OwnerUserId
         }).ToList();
 
         // 3. Save JSON to Redis
@@ -76,7 +83,7 @@ public class MoviesController : ControllerBase
 
     
     // GET: api/movies/search
-    [Authorize]
+    [Authorize(Roles = UserRoles.MovieManagers)]
     [HttpGet("search")]
     public async Task<ActionResult> SearchMovies(
         [FromQuery] string? search,
@@ -84,6 +91,11 @@ public class MoviesController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
+        if (!_featureFlags.CurrentValue.EnableMovieSearch)
+            return FeatureDisabled(
+                nameof(FeatureFlags.EnableMovieSearch),
+                "Movie search is currently disabled.");
+
         // 1. Validate pagination parameters
         if (page < 1)
             return BadRequest("Page must be at least 1.");
@@ -92,12 +104,19 @@ public class MoviesController : ControllerBase
             return BadRequest("PageSize must be between 1 and 100.");
 
         // 2. Call repository
+        int? ownerUserId = User.IsInRole(UserRoles.Author)
+            ? GetCurrentUserId()
+            : null;
+        if (User.IsInRole(UserRoles.Author) && ownerUserId is null)
+            return Forbid();
+
         var (movies, totalCount) =
             await _movieRepository.SearchAsync(
                 search,
                 categoryId,
                 page,
-                pageSize);
+                pageSize,
+                ownerUserId);
 
         // 3. Convert Movie entities to DTOs
         var movieDtos = movies.Select(m => new MovieResponseDto
@@ -108,7 +127,8 @@ public class MoviesController : ControllerBase
             ReleaseYear = m.ReleaseYear,
             CategoryId = m.CategoryId,
             CategoryName = m.Category.Name,
-            Description = m.Description
+            Description = m.Description,
+            OwnerUserId = m.OwnerUserId
         }).ToList();
 
         // 4. Calculate number of pages
@@ -162,7 +182,8 @@ public class MoviesController : ControllerBase
             ReleaseYear = movie.ReleaseYear,
             CategoryId = movie.CategoryId,
             CategoryName = movie.Category.Name,
-            Description = movie.Description
+            Description = movie.Description,
+            OwnerUserId = movie.OwnerUserId
         };
 
         // 3. Save to Redis
@@ -179,10 +200,19 @@ public class MoviesController : ControllerBase
     }
 
     // POST: api/movies
-    [Authorize]
+    [Authorize(Roles = UserRoles.MovieManagers)]
     [HttpPost]
     public async Task<ActionResult> AddMovie(MovieDto dto)
     {
+        if (!_featureFlags.CurrentValue.EnableMovieCreation)
+            return FeatureDisabled(
+                nameof(FeatureFlags.EnableMovieCreation),
+                "Movie creation is currently disabled.");
+
+        int? ownerUserId = GetCurrentUserId();
+        if (ownerUserId is null)
+            return Forbid();
+
         bool categoryExists =
             await _movieRepository.CategoryExistsAsync(
                 dto.CategoryId);
@@ -196,7 +226,8 @@ public class MoviesController : ControllerBase
             Director = dto.Director,
             ReleaseYear = dto.ReleaseYear,
             CategoryId = dto.CategoryId,
-            Description = dto.Description
+            Description = dto.Description,
+            OwnerUserId = ownerUserId
         };
 
         await _movieRepository.AddAsync(movie);
@@ -214,21 +245,30 @@ public class MoviesController : ControllerBase
                 movie.Director,
                 movie.ReleaseYear,
                 movie.CategoryId,
-                movie.Description
+                movie.Description,
+                movie.OwnerUserId
             });
     }
 
     // PUT: api/movies/1
-    [Authorize]
+    [Authorize(Roles = UserRoles.MovieManagers)]
     [HttpPut("{id}")]
     public async Task<ActionResult> UpdateMovie(
         int id,
         MovieDto dto)
     {
+        if (!_featureFlags.CurrentValue.EnableMovieUpdates)
+            return FeatureDisabled(
+                nameof(FeatureFlags.EnableMovieUpdates),
+                "Movie updates are currently disabled.");
+
         var movie = await _movieRepository.GetByIdAsync(id);
 
         if (movie == null)
             return NotFound();
+
+        if (!CanManageMovie(movie))
+            return Forbid();
 
         bool categoryExists =
             await _movieRepository.CategoryExistsAsync(
@@ -255,19 +295,29 @@ public class MoviesController : ControllerBase
             movie.Title,
             movie.Director,
             movie.ReleaseYear,
-            movie.CategoryId
+            movie.CategoryId,
+            movie.Description,
+            movie.OwnerUserId
         });
     }
 
     // DELETE: api/movies/1
-    [Authorize]
+    [Authorize(Roles = UserRoles.MovieManagers)]
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteMovie(int id)
     {
+        if (!_featureFlags.CurrentValue.EnableMovieDeletion)
+            return FeatureDisabled(
+                nameof(FeatureFlags.EnableMovieDeletion),
+                "Movie deletion is currently disabled.");
+
         var movie = await _movieRepository.GetByIdAsync(id);
 
         if (movie == null)
             return NotFound();
+
+        if (!CanManageMovie(movie))
+            return Forbid();
 
         await _movieRepository.DeleteAsync(movie);
 
@@ -277,4 +327,20 @@ public class MoviesController : ControllerBase
 
         return NoContent();
     }
+
+    private ObjectResult FeatureDisabled(string feature, string message) =>
+        StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            new { message, feature });
+
+    private int? GetCurrentUserId()
+    {
+        var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(claim, out var userId) ? userId : null;
+    }
+
+    private bool CanManageMovie(Movie movie) =>
+        User.IsInRole(UserRoles.Admin) ||
+        (User.IsInRole(UserRoles.Author) &&
+         movie.OwnerUserId == GetCurrentUserId());
 }

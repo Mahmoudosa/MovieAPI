@@ -40,7 +40,9 @@ export async function apiRequest(path, options = {}) {
       : result?.detail || result?.title || result?.message ||
         Object.values(result?.errors || {}).flat().join(' ') ||
         `API request failed with status ${response.status}.`;
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
 
   return result;

@@ -1815,6 +1815,62 @@ a.admin-stat-card:hover {
   text-align: center;
 }
 
+.movie-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.movie-pagination p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.movie-pagination > div {
+  display: flex;
+  gap: 8px;
+}
+
+.movie-detail-panel {
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card-raised);
+}
+
+.movie-detail-panel h3 {
+  margin: 5px 0 0;
+  color: var(--text);
+}
+
+.movie-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 14px 0 0;
+}
+
+.movie-detail-grid dt {
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.movie-detail-grid dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.movie-detail-description {
+  grid-column: 1 / -1;
+}
+
 .admin-form {
   margin-top: 0;
 }

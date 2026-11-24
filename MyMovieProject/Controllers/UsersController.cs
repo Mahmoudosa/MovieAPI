@@ -1,13 +1,17 @@
 
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
 using MyMovieApp.Repositories.Interfaces;
+using MyMovieApp.Configuration;
 
 namespace MyMovieApp.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = UserRoles.Admin)]
 public class UsersController : ControllerBase
 {
     private readonly IUserRepository _userRepository;
@@ -27,7 +31,8 @@ public class UsersController : ControllerBase
         {
             u.Id,
             u.UserName,
-            u.Email
+            u.Email,
+            Role = UserRoles.Normalize(u.Role)
         });
 
         return Ok(result);
@@ -46,7 +51,8 @@ public class UsersController : ControllerBase
         {
             user.Id,
             user.UserName,
-            user.Email
+            user.Email,
+            Role = UserRoles.Normalize(user.Role)
         });
     }
 
@@ -69,7 +75,8 @@ public class UsersController : ControllerBase
             {
                 user.Id,
                 user.UserName,
-                user.Email
+                user.Email,
+                Role = UserRoles.Normalize(user.Role)
             });
     }
 
@@ -92,7 +99,39 @@ public class UsersController : ControllerBase
         {
             user.Id,
             user.UserName,
-            user.Email
+            user.Email,
+            Role = UserRoles.Normalize(user.Role)
+        });
+    }
+
+    [HttpPut("{id}/role")]
+    public async Task<ActionResult> UpdateUserRole(
+        int id,
+        UpdateUserRoleDto dto)
+    {
+        var user = await _userRepository.GetByIdAsync(id);
+        if (user == null)
+            return NotFound();
+
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.Equals(currentUserId, id.ToString(), StringComparison.Ordinal) &&
+            UserRoles.Normalize(dto.Role) != UserRoles.Admin)
+        {
+            return BadRequest(new
+            {
+                message = "You cannot remove your own Admin role."
+            });
+        }
+
+        user.Role = UserRoles.Normalize(dto.Role);
+        await _userRepository.SaveChangesAsync();
+
+        return Ok(new
+        {
+            user.Id,
+            user.UserName,
+            user.Email,
+            Role = user.Role
         });
     }
 

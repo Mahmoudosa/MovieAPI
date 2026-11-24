@@ -5,6 +5,8 @@ using System.Security.Claims;
 using MyMovieApp.DTOs;
 using MyMovieApp.Models;
 using MyMovieApp.Repositories.Interfaces;
+using MyMovieApp.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace MyMovieApp.Controllers;
 
@@ -13,16 +15,23 @@ namespace MyMovieApp.Controllers;
 public class ReviewsController : ControllerBase
 {
     private readonly IReviewRepository _reviewRepository;
+    private readonly IOptionsMonitor<FeatureFlags> _featureFlags;
 
-    public ReviewsController(IReviewRepository reviewRepository)
+    public ReviewsController(
+        IReviewRepository reviewRepository,
+        IOptionsMonitor<FeatureFlags> featureFlags)
     {
         _reviewRepository = reviewRepository;
+        _featureFlags = featureFlags;
     }
 
     // GET: api/reviews
     [HttpGet]
     public async Task<ActionResult> GetReviews()
     {
+        if (!_featureFlags.CurrentValue.EnableMovieReviews)
+            return ReviewsDisabled();
+
         var reviews = await _reviewRepository.GetAllAsync();
 
         var result = reviews.Select(r => new
@@ -43,6 +52,9 @@ public class ReviewsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<ActionResult> GetReviewById(int id)
     {
+        if (!_featureFlags.CurrentValue.EnableMovieReviews)
+            return ReviewsDisabled();
+
         var review = await _reviewRepository.GetByIdAsync(id);
 
         if (review == null)
@@ -65,6 +77,9 @@ public class ReviewsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult> AddReview(ReviewDto dto)
     {
+        if (!_featureFlags.CurrentValue.EnableMovieReviews)
+            return ReviewsDisabled();
+
         int? currentUserId = GetCurrentUserId();
         if (currentUserId is null || dto.UserId != currentUserId.Value)
             return Forbid();
@@ -110,6 +125,9 @@ public class ReviewsController : ControllerBase
     public async Task<ActionResult> UpdateReview(
         int id, ReviewDto dto)
     {
+        if (!_featureFlags.CurrentValue.EnableMovieReviews)
+            return ReviewsDisabled();
+
         var review = await _reviewRepository.GetByIdAsync(id);
 
         if (review == null)
@@ -155,6 +173,9 @@ public class ReviewsController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteReview(int id)
     {
+        if (!_featureFlags.CurrentValue.EnableMovieReviews)
+            return ReviewsDisabled();
+
         var review = await _reviewRepository.GetByIdAsync(id);
 
         if (review == null)
@@ -173,4 +194,13 @@ public class ReviewsController : ControllerBase
         var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return int.TryParse(claim, out var userId) ? userId : null;
     }
+
+    private ObjectResult ReviewsDisabled() =>
+        StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            new
+            {
+                message = "Movie reviews are currently disabled.",
+                feature = nameof(FeatureFlags.EnableMovieReviews)
+            });
 }

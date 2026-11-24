@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAppData } from '../../hooks/useAppData';
 import { useAuth } from '../../hooks/useAuth';
+import { searchMovies } from '../../services/movieService';
 
 const blankMovie = {
   title: '',
@@ -13,7 +14,6 @@ const blankMovie = {
 
 function ManageMovies({ mode = 'admin' }) {
   const {
-    catalogMovies,
     catalogCategories,
     apiLoading,
     apiError,
@@ -21,19 +21,26 @@ function ManageMovies({ mode = 'admin' }) {
     updateMovie,
     deleteMovie
   } = useAppData();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const isAuthor = mode === 'author';
-  const movies = useMemo(
-    () => (isAuthenticated ? catalogMovies : []),
-    [catalogMovies, isAuthenticated]
-  );
-  const categories = useMemo(
-    () => (isAuthenticated ? catalogCategories : []),
-    [catalogCategories, isAuthenticated]
-  );
+  const canManageMovies = isAuthenticated &&
+    user?.role === (isAuthor ? 'Author' : 'Admin');
+  const categories = isAuthenticated ? catalogCategories : [];
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [viewingMovie, setViewingMovie] = useState(null);
+  const [searchResults, setSearchResults] = useState({
+    items: [],
+    totalCount: 0,
+    totalPages: 0
+  });
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const requestSequence = useRef(0);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(() => (
     searchParams.has('new')
@@ -43,13 +50,82 @@ function ManageMovies({ mode = 'admin' }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
-  const visibleMovies = useMemo(() => movies.filter((movie) => {
-    const matchesText = `${movie.title} ${movie.director}`.toLowerCase().includes(query.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || movie.categoryId === Number(categoryFilter);
-    return matchesText && matchesCategory;
-  }), [movies, query, categoryFilter]);
+  const normalizedQuery = query.trim();
+  const isDebouncing = normalizedQuery !== debouncedQuery;
+  const isSearchLoading = searchLoading || isDebouncing;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isDebouncing) return undefined;
+
+    const controller = new AbortController();
+    const requestId = ++requestSequence.current;
+    let active = true;
+    let correctingPage = false;
+    const timer = window.setTimeout(async () => {
+      setSearchLoading(true);
+      setSearchError('');
+      try {
+        const result = await searchMovies({
+          search: debouncedQuery,
+          categoryId: categoryFilter,
+          page,
+          pageSize: 20,
+          signal: controller.signal
+        });
+        if (!active || requestId !== requestSequence.current) return;
+        const totalPages = result?.totalPages ?? 0;
+        if (page > Math.max(1, totalPages)) {
+          correctingPage = true;
+          setPage(Math.max(1, totalPages));
+          return;
+        }
+        setSearchResults({
+          items: result?.items ?? [],
+          totalCount: result?.totalCount ?? 0,
+          totalPages
+        });
+      } catch (requestError) {
+        if (!active || requestError.name === 'AbortError') return;
+        const errorMessage = requestError.status === 401
+          ? 'Your session has expired or is not authorized. Please sign in again.'
+          : requestError.status === 403
+            ? `Your account does not have permission to access ${isAuthor ? 'author' : 'admin'} movie management.`
+            : requestError.status === 503
+              ? requestError.message || 'Movie search is currently disabled.'
+              : requestError.message;
+        setSearchError(errorMessage);
+        setSearchResults({ items: [], totalCount: 0, totalPages: 0 });
+      } finally {
+        if (active && !correctingPage && requestId === requestSequence.current) {
+          setSearchLoading(false);
+        }
+      }
+    }, 0);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    isAuthenticated,
+    isAuthor,
+    isDebouncing,
+    debouncedQuery,
+    categoryFilter,
+    page,
+    refreshKey
+  ]);
 
   const startAdd = () => {
+    setViewingMovie(null);
     setEditingId(null);
     setForm({ ...blankMovie, categoryId: categories[0]?.id || '' });
     setMessage('');
@@ -58,6 +134,7 @@ function ManageMovies({ mode = 'admin' }) {
   };
 
   const startEdit = (movie) => {
+    setViewingMovie(null);
     setEditingId(movie.id);
     setForm({
       title: movie.title,
@@ -79,8 +156,8 @@ function ManageMovies({ mode = 'admin' }) {
 
   const saveMovie = async (event) => {
     event.preventDefault();
-    if (!isAuthenticated) {
-      setError('Sign in first to save movies to the database.');
+    if (!canManageMovies) {
+      setError(`Sign in with an ${isAuthor ? 'Author' : 'Admin'} account to manage movies.`);
       return;
     }
     const year = Number(form.releaseYear);
@@ -103,14 +180,18 @@ function ManageMovies({ mode = 'admin' }) {
       categoryId: category.id,
       categoryName: category.name,
       description: form.description.trim(),
-      icon: editingId ? movies.find((movie) => movie.id === editingId)?.icon || '✦' : '✦',
-      posterTone: editingId ? movies.find((movie) => movie.id === editingId)?.posterTone || 'violet' : 'violet'
+      icon: editingId ? searchResults.items.find((movie) => movie.id === editingId)?.icon || '✦' : '✦',
+      posterTone: editingId ? searchResults.items.find((movie) => movie.id === editingId)?.posterTone || 'violet' : 'violet'
     };
 
     setError('');
     setMessage('');
     const saved = editingId
-      ? await updateMovie(editingId, movieData)
+      ? await updateMovie(
+        editingId,
+        movieData,
+        searchResults.items.find((movie) => movie.id === editingId)
+      )
       : await addMovie(movieData);
     if (!saved) return;
 
@@ -119,17 +200,24 @@ function ManageMovies({ mode = 'admin' }) {
     } else {
       setMessage('Movie added to the database.');
     }
+    setViewingMovie(null);
+    setRefreshKey((current) => current + 1);
     closeForm();
   };
 
   const removeMovie = async (movie) => {
-    if (!isAuthenticated) {
-      setError('Sign in first to delete movies from the database.');
+    if (!canManageMovies) {
+      setError(`Sign in with an ${isAuthor ? 'Author' : 'Admin'} account to manage movies.`);
       return;
     }
     if (!window.confirm(`Delete "${movie.title}" from the database?`)) return;
-    const deleted = await deleteMovie(movie.id);
+    const deleted = await deleteMovie(movie.id, movie);
     if (!deleted) return;
+    if (searchResults.items.length === 1 && page > 1) {
+      setPage((current) => current - 1);
+    }
+    setRefreshKey((current) => current + 1);
+    if (viewingMovie?.id === movie.id) setViewingMovie(null);
     setMessage('Movie deleted from the database.');
     setError('');
   };
@@ -137,16 +225,22 @@ function ManageMovies({ mode = 'admin' }) {
   return (
     <main className="content portal-content">
       <header className="page-header">
-        <div><span className="eyebrow">CATALOG MANAGEMENT</span><h1>{isAuthor ? 'Add a movie' : 'Manage movies'}</h1><p>Movies are loaded from and saved to the application database.</p></div>
-        <button className="button button-primary" onClick={startAdd} disabled={!isAuthenticated || apiLoading}>＋ Add Movie</button>
+        <div><span className="eyebrow">CATALOG MANAGEMENT</span><h1>Manage movies</h1><p>{isAuthor ? 'Create and manage movies in the application database.' : 'Movies are loaded from and saved to the application database.'}</p></div>
+        <button className="button button-primary" onClick={startAdd} disabled={!canManageMovies || apiLoading}>＋ Add Movie</button>
       </header>
       {!isAuthenticated && (
         <p className="demo-data-notice">
-          Sign in to load and manage database movies. <Link to="/login">Go to login</Link>.
+          Sign in with an {isAuthor ? 'Author' : 'Admin'} account to manage database movies. <Link to="/login">Go to login</Link>.
         </p>
       )}
-      {apiLoading && <p className="muted-copy" role="status">Loading movies and categories from the database…</p>}
+      {isAuthenticated && !canManageMovies && (
+        <p className="demo-data-notice" role="status">
+          This page requires an {isAuthor ? 'Author' : 'Admin'} account. Your current role is {user?.role || 'User'}.
+        </p>
+      )}
+      {apiLoading && <p className="muted-copy" role="status">Loading categories and account data…</p>}
       {apiError && <p className="error-message" role="alert">{apiError}</p>}
+      {searchError && <p className="error-message" role="alert">{searchError}</p>}
       {message && <p className="success-message" role="status">{message}</p>}
       {error && <p className="error-message" role="alert">{error}</p>}
 
@@ -169,31 +263,53 @@ function ManageMovies({ mode = 'admin' }) {
 
       <section className="admin-panel">
         <div className="admin-toolbar">
-          <div><span className="eyebrow">MOVIE CATALOG</span><h2>{movies.length} movies</h2></div>
+          <div><span className="eyebrow">MOVIE CATALOG</span><h2>{searchResults.totalCount} movies</h2></div>
           <div className="admin-toolbar-filters">
             <label className="visually-hidden" htmlFor="admin-movie-search">Search movies</label>
-            <input id="admin-movie-search" type="search" placeholder="Search title or director" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <input id="admin-movie-search" type="search" placeholder="Search movie titles" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); setViewingMovie(null); }} />
             <label className="visually-hidden" htmlFor="admin-movie-category">Filter by category</label>
-            <select id="admin-movie-category" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="all">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+            <select id="admin-movie-category" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); setViewingMovie(null); }}><option value="all">All categories</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
           </div>
         </div>
+        {viewingMovie && (
+          <div className="movie-detail-panel" role="region" aria-label={`${viewingMovie.title} details`}>
+            <div className="admin-panel-heading">
+              <div><span className="eyebrow">MOVIE DETAILS</span><h3>{viewingMovie.title}</h3></div>
+              <button type="button" className="icon-button" aria-label="Close movie details" onClick={() => setViewingMovie(null)}>×</button>
+            </div>
+            <dl className="movie-detail-grid">
+              <div><dt>Director</dt><dd>{viewingMovie.director}</dd></div>
+              <div><dt>Release year</dt><dd>{viewingMovie.releaseYear}</dd></div>
+              <div><dt>Category</dt><dd>{viewingMovie.categoryName}</dd></div>
+              <div className="movie-detail-description"><dt>Description</dt><dd>{viewingMovie.description || 'No description available.'}</dd></div>
+            </dl>
+          </div>
+        )}
         <div className="table-scroll">
           <table className="admin-table">
             <thead><tr><th>ID</th><th>Title</th><th>Director</th><th>Year</th><th>Category</th><th>Actions</th></tr></thead>
             <tbody>
-              {visibleMovies.map((movie) => (
+              {isSearchLoading && <tr><td colSpan="6" className="table-empty" role="status">Loading movies…</td></tr>}
+              {!isSearchLoading && searchResults.items.map((movie) => (
                 <tr key={movie.id}>
                   <td className="table-secondary">#{movie.id}</td>
                   <td><strong>{movie.title}</strong></td>
                   <td>{movie.director}</td>
                   <td>{movie.releaseYear}</td>
                   <td><span className="table-pill">{movie.categoryName}</span></td>
-                  <td><div className="table-actions"><button className="table-action" onClick={() => startEdit(movie)} disabled={!isAuthenticated}>Edit</button><button className="table-action danger" onClick={() => removeMovie(movie)} disabled={!isAuthenticated}>Delete</button></div></td>
+                  <td><div className="table-actions"><button className="table-action" onClick={() => setViewingMovie(movie)}>View</button><button className="table-action" onClick={() => startEdit(movie)} disabled={!canManageMovies}>Edit</button><button className="table-action danger" onClick={() => removeMovie(movie)} disabled={!canManageMovies}>Delete</button></div></td>
                 </tr>
               ))}
-              {!visibleMovies.length && <tr><td colSpan="6" className="table-empty">No movies match your search or category.</td></tr>}
+              {!isSearchLoading && isAuthenticated && !searchError && !searchResults.items.length && <tr><td colSpan="6" className="table-empty">No movies match your search or category.</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div className="movie-pagination">
+          <p>{searchResults.totalCount} matching movies · Page {page} of {searchResults.totalPages}</p>
+          <div>
+            <button className="button button-quiet" type="button" onClick={() => { setPage((current) => Math.max(1, current - 1)); setViewingMovie(null); }} disabled={page <= 1 || isSearchLoading}>Previous</button>
+            <button className="button button-quiet" type="button" onClick={() => { setPage((current) => current + 1); setViewingMovie(null); }} disabled={page >= searchResults.totalPages || isSearchLoading}>Next</button>
+          </div>
         </div>
       </section>
     </main>

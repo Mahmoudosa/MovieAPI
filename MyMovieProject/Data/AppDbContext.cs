@@ -67,7 +67,17 @@ namespace MyMovieApp.Data
             modelBuilder.Entity<Movie>()
             .HasIndex(m => m.Title)
             .HasDatabaseName("IX_Movies_Title");
-     
+
+            modelBuilder.Entity<User>()
+                .Property(user => user.Role)
+                .HasMaxLength(20)
+                .HasDefaultValue("User");
+
+            modelBuilder.Entity<Movie>()
+                .HasOne(movie => movie.Owner)
+                .WithMany(user => user.AuthoredMovies)
+                .HasForeignKey(movie => movie.OwnerUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         }
     }
 }

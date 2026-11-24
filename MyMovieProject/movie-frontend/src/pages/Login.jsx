@@ -18,8 +18,15 @@ function Login() {
     setLoading(true);
 
     try {
-      await signIn(form);
-      navigate('/movies', { replace: true });
+      const user = await signIn(form);
+      navigate(
+        user.role === 'Admin'
+          ? '/admin'
+          : user.role === 'Author'
+            ? '/author'
+            : '/movies',
+        { replace: true }
+      );
     } catch (requestError) {
       setError(requestError.message);
     } finally {

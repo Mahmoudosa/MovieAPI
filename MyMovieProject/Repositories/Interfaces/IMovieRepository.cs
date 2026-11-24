@@ -19,6 +19,7 @@ namespace MyMovieApp.Repositories.Interfaces
         string? search,
         int? categoryId,
         int page,
-        int pageSize);
+        int pageSize,
+        int? ownerUserId = null);
     }
 }

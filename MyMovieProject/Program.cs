@@ -8,11 +8,16 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.AspNetCore.Identity;
 using MyMovieApp.Models;
+using MyMovieApp.Configuration;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
+builder.Services
+    .AddOptions<FeatureFlags>()
+    .BindConfiguration("FeatureFlags");
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -44,6 +49,7 @@ builder.Services
 
                 ValidIssuer = builder.Configuration["Jwt:Issuer"],
                 ValidAudience = builder.Configuration["Jwt:Audience"],
+                RoleClaimType = ClaimTypes.Role,
 
                 IssuerSigningKey = new SymmetricSecurityKey(
                     Encoding.UTF8.GetBytes(jwtKey))

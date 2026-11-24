@@ -11,6 +11,9 @@ namespace MyMovieApp.Models
         public int CategoryId { get; set; }
         public Category Category { get; set; } = null!;
 
+        public int? OwnerUserId { get; set; }
+        public User? Owner { get; set; }
+
         public ICollection<Review> Reviews { get; set; } = new List<Review>();
         public ICollection<Watchlist> Watchlists { get; set; } = new List<Watchlist>();
         public DateTime? CreatedAtUtc { get; set; }

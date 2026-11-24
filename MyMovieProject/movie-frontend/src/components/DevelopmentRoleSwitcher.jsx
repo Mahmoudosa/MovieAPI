@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppData } from '../hooks/useAppData';
+import { useAuth } from '../hooks/useAuth';
 
 const roleDestinations = {
   User: '/',
@@ -9,10 +10,20 @@ const roleDestinations = {
 
 function DevelopmentRoleSwitcher() {
   const { setDemoRole } = useAppData();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
   if (!import.meta.env.DEV) return null;
+  if (isAuthenticated) {
+    return (
+      <span className="role-switcher" aria-label="Signed-in account role">
+        <span>ACCOUNT ROLE</span>
+        <strong>{user.role}</strong>
+      </span>
+    );
+  }
+
   const currentRole = pathname.startsWith('/admin')
     ? 'Admin'
     : pathname.startsWith('/author')

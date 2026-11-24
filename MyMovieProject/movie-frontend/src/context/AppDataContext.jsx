@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import AppDataContext from './AppDataContextValue';
 import { useAuth } from '../hooks/useAuth';
 import {
@@ -38,6 +39,7 @@ function mapMovie(movie) {
     categoryId: Number(movie.categoryId ?? movie.CategoryId ?? 0),
     categoryName: movie.categoryName ?? movie.CategoryName ?? '',
     description: movie.description ?? movie.Description ?? '',
+    ownerUserId: Number(movie.ownerUserId ?? movie.OwnerUserId) || null,
     rating: Number(movie.rating ?? movie.Rating ?? 0),
     addedAt: movie.addedAt ?? movie.AddedAt ?? '',
     icon: movie.icon ?? '✦',
@@ -102,6 +104,8 @@ function usePersistentState(key, fallback) {
 
 export function AppDataProvider({ children, movies }) {
   const { isAuthenticated, user, token } = useAuth();
+  const { pathname } = useLocation();
+  const isMovieManagementPage = pathname === '/admin/movies' || pathname === '/author/movies';
   const [movieList, setMovieList] = usePersistentState(storageKeys.movies, movies);
   const [categories, setCategories] = usePersistentState(storageKeys.categories, mockCategories);
   const [users, setUsers] = usePersistentState(storageKeys.users, mockUsers);
@@ -122,36 +126,60 @@ export function AppDataProvider({ children, movies }) {
   const [demoRole, setDemoRole] = useState('User');
   const [apiState, setApiState] = useState({
     token: null,
+    pathname: null,
     data: null,
     error: ''
   });
+  const apiStateRef = useRef(apiState);
+
+  useEffect(() => {
+    apiStateRef.current = apiState;
+  }, [apiState]);
 
   useEffect(() => {
     let active = true;
 
     if (!isAuthenticated) return undefined;
 
+    const currentApiState = apiStateRef.current;
+    const currentData = currentApiState.token === token
+      ? currentApiState.data
+      : null;
     Promise.allSettled([
-      getMovies(),
-      getCategories(),
-      getReviews(),
-      getWatchlists()
+      isMovieManagementPage
+        ? Promise.resolve(null)
+        : currentData?.movies
+          ? Promise.resolve(currentData.movies)
+          : getMovies(),
+      currentData?.categories
+        ? Promise.resolve(currentData.categories)
+        : getCategories(),
+      isMovieManagementPage
+        ? Promise.resolve(null)
+        : currentData?.reviews
+          ? Promise.resolve(currentData.reviews)
+          : getReviews(),
+      isMovieManagementPage
+        ? Promise.resolve(null)
+        : currentData?.watchlists
+          ? Promise.resolve(currentData.watchlists)
+          : getWatchlists()
     ]).then((results) => {
       if (!active) return;
 
       const [movieResult, categoryResult, reviewResult, watchlistResult] = results;
       const nextData = {
         movies: movieResult.status === 'fulfilled'
-          ? movieResult.value.map(mapMovie)
+          ? movieResult.value?.map(mapMovie) ?? null
           : null,
         categories: categoryResult.status === 'fulfilled'
-          ? categoryResult.value.map(mapCategory)
+          ? categoryResult.value?.map(mapCategory) ?? null
           : null,
         reviews: reviewResult.status === 'fulfilled'
-          ? reviewResult.value.map(mapReview)
+          ? reviewResult.value?.map(mapReview) ?? null
           : null,
         watchlists: watchlistResult.status === 'fulfilled'
-          ? watchlistResult.value.map(mapWatchlist)
+          ? watchlistResult.value?.map(mapWatchlist) ?? null
           : null
       };
       const failures = results
@@ -159,6 +187,7 @@ export function AppDataProvider({ children, movies }) {
         .map((result) => result.reason.message);
       setApiState({
         token,
+        pathname,
         data: nextData,
         error: failures.join(' ')
       });
@@ -167,9 +196,10 @@ export function AppDataProvider({ children, movies }) {
     return () => {
       active = false;
     };
-  }, [isAuthenticated, token]);
+  }, [isAuthenticated, token, pathname, isMovieManagementPage]);
 
-  const apiData = isAuthenticated && apiState.token === token
+  const apiData = isAuthenticated && apiState.token === token &&
+    apiState.pathname === pathname
     ? apiState.data
     : null;
   const apiLoading = isAuthenticated && apiData === null;
@@ -183,10 +213,17 @@ export function AppDataProvider({ children, movies }) {
       ));
       return true;
     } catch (error) {
+      const message = error.status === 401
+        ? 'Your session has expired or is not authorized. Please sign in again.'
+        : error.status === 403
+          ? 'Your account does not have permission to perform this action.'
+          : error.status === 503
+            ? error.message || 'This feature is currently disabled.'
+            : error.message;
       setApiState((current) => (
         current.token === token
-          ? { ...current, error: error.message }
-          : { ...current, token, error: error.message }
+          ? { ...current, error: message }
+          : { ...current, token, error: message }
       ));
       return false;
     }
@@ -393,7 +430,9 @@ export function AppDataProvider({ children, movies }) {
           ...current,
           data: {
             ...current.data,
-            movies: [...(current.data?.movies ?? []), savedMovie]
+            movies: current.data?.movies
+              ? [...current.data.movies, savedMovie]
+              : current.data?.movies
           }
         }));
       });
@@ -410,9 +449,10 @@ export function AppDataProvider({ children, movies }) {
     return movie;
   };
 
-  const updateMovie = async (movieId, changes) => {
+  const updateMovie = async (movieId, changes, movieFromSearch) => {
     if (isAuthenticated) {
-      const currentMovie = apiData?.movies?.find((movie) => movie.id === Number(movieId));
+      const currentMovie = apiData?.movies?.find((movie) => movie.id === Number(movieId))
+        ?? movieFromSearch;
       const category = apiData?.categories?.find(
         (item) => item.id === Number(changes.categoryId)
       );
@@ -443,9 +483,9 @@ export function AppDataProvider({ children, movies }) {
           ...current,
           data: {
             ...current.data,
-            movies: current.data.movies.map((movie) => (
+            movies: current.data.movies?.map((movie) => (
               movie.id === Number(movieId) ? updatedMovie : movie
-            ))
+            )) ?? current.data.movies
           }
         }));
       });
@@ -458,9 +498,10 @@ export function AppDataProvider({ children, movies }) {
     return true;
   };
 
-  const deleteMovie = async (movieId) => {
+  const deleteMovie = async (movieId, movieFromSearch) => {
     if (isAuthenticated) {
-      if (!apiData?.movies?.some((movie) => movie.id === Number(movieId))) {
+      if (!apiData?.movies?.some((movie) => movie.id === Number(movieId)) &&
+          movieFromSearch?.id !== Number(movieId)) {
         setApiState((current) => ({
           ...current,
           token,
@@ -474,7 +515,8 @@ export function AppDataProvider({ children, movies }) {
           ...current,
           data: {
             ...current.data,
-            movies: current.data.movies.filter((movie) => movie.id !== Number(movieId)),
+            movies: current.data.movies?.filter((movie) => movie.id !== Number(movieId))
+              ?? current.data.movies,
             watchlists: current.data.watchlists?.filter((item) => item.movieId !== Number(movieId)),
             reviews: current.data.reviews?.filter((review) => review.movieId !== Number(movieId))
           }

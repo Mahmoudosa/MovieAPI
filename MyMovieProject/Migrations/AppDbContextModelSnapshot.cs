@@ -64,6 +64,9 @@ namespace MyMovieProject.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("OwnerUserId")
+                        .HasColumnType("int");
+
                     b.Property<int>("ReleaseYear")
                         .HasColumnType("int");
 
@@ -77,6 +80,8 @@ namespace MyMovieProject.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CategoryId");
+
+                    b.HasIndex("OwnerUserId");
 
                     b.HasIndex("Title")
                         .HasDatabaseName("IX_Movies_Title");
@@ -129,6 +134,13 @@ namespace MyMovieProject.Migrations
                     b.Property<string>("PasswordHash")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("User");
+
                     b.Property<string>("UserName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -175,7 +187,14 @@ namespace MyMovieProject.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("MyMovieApp.Models.User", "Owner")
+                        .WithMany("AuthoredMovies")
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Category");
+
+                    b.Navigation("Owner");
                 });
 
             modelBuilder.Entity("MyMovieApp.Models.Review", b =>
@@ -230,6 +249,8 @@ namespace MyMovieProject.Migrations
 
             modelBuilder.Entity("MyMovieApp.Models.User", b =>
                 {
+                    b.Navigation("AuthoredMovies");
+
                     b.Navigation("Reviews");
 
                     b.Navigation("Watchlists");

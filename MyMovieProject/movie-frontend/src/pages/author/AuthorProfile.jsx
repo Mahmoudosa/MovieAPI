@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAppData } from '../../hooks/useAppData';
 
 function AuthorProfile() {
-  const { authorProfile, setAuthorProfile, articles } = useAppData();
+  const { authorProfile, setAuthorProfile, catalogMovies } = useAppData();
   const [form, setForm] = useState(authorProfile);
   const [message, setMessage] = useState('');
 
@@ -19,10 +19,10 @@ function AuthorProfile() {
   return (
     <main className="content portal-content author-content">
       <header className="page-header">
-        <div><span className="eyebrow">EDITORIAL STUDIO</span><h1>Author profile</h1><p>Manage your demo author identity and biography.</p></div>
-        <span className="result-count">{articles.length} articles</span>
+        <div><span className="eyebrow">MOVIE STUDIO</span><h1>Author profile</h1><p>Manage your demo author identity and biography.</p></div>
+        <span className="result-count">{catalogMovies.length} movies</span>
       </header>
-      <p className="demo-data-notice author-notice">Demo profile only. This feature is not connected to backend role claims.</p>
+      <p className="demo-data-notice author-notice">Profile details are saved on this device. Your account role is controlled by the backend.</p>
       <section className="profile-summary panel author-profile-summary">
         <div className="profile-avatar author-avatar" aria-hidden="true">{form.userName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}</div>
         <div><span className="eyebrow">DEMO AUTHOR</span><h2>{form.userName}</h2><p>{form.email}</p><p className="author-bio">{form.biography || 'No biography added yet.'}</p></div>
